@@ -4,8 +4,10 @@
 2.0.2 sobre a API WebKitGTK 4.1 disponível no sistema e cria uma janela GTK
 com um `WebView`.
 
-O contexto é efêmero nesta etapa, portanto cookies, cache e demais dados do
-WebKit não são persistidos entre execuções. Navegações passam pelo
+O perfil `Pessoal` usa um `WebsiteDataManager` persistente, portanto cookies,
+cache e demais dados do WebKit são mantidos entre execuções em
+`~/.local/share/aegis-browser/profiles/Pessoal` e
+`~/.cache/aegis-browser/profiles/Pessoal`. Navegações passam pelo
 `browser-shell` antes de chamar `load_uri`; eventos de início, progresso,
 título, falha e conclusão retornam ao shell. Redirects e novas janelas passam
 por uma decisão de política; downloads são cancelados por padrão.
@@ -15,7 +17,7 @@ diretório é removido quando o browser é encerrado.
 O botão `Configurações` abre o painel de segurança e aplica as mudanças ao
 shell e ao filtro de navegação da engine.
 Cada aba possui um `WebView`, um identificador de shell e uma engine próprios;
-o contexto efêmero é compartilhado pelo perfil entre as abas. O cabeçalho de
+O contexto persistente é compartilhado pelo perfil entre as abas. O cabeçalho de
 cada aba mostra o título da página, o domínio como fallback e o favicon da
 `WebView` correspondente quando o site o disponibiliza. O ícone é limpo no
 início de uma nova navegação e atualizado tanto pelo sinal `notify::favicon`
@@ -30,7 +32,7 @@ uma ação do usuário, mas autoplay continua bloqueado por padrão.
 As configurações também possuem páginas para tema GTK, buscador padrão (DuckDuckGo,
 Brave Search, Startpage, Qwant, Bing ou Google) e perfis. Os temas Claro e Escuro
 forçam variantes próprias do GTK; Sistema restaura a preferência do desktop.
-Perfis adicionais criam contextos efêmeros separados para novas abas;
+Perfis adicionais criam contextos persistentes separados para novas abas;
 abas já abertas não são movidas entre perfis nesta etapa.
 
 A reprodução depende dos codecs GStreamer instalados no sistema. O backend não
@@ -59,8 +61,9 @@ cargo run -p aegis-browser-webkit
   na distribuição;
 - downloads ainda não têm fluxo explícito de aprovação/quarentena: são
   bloqueados por padrão.
-- as preferências ainda valem somente para a execução atual; persistência
-  criptografada por perfil será adicionada junto do armazenamento seguro.
+- favoritos e preferências ainda valem somente para a execução atual;
+- cookies e armazenamento de sites são persistentes, mas ainda não há uma tela
+  dedicada para limpar dados por site ou por perfil.
 
 Este backend é um protótipo de integração, não uma versão pronta para
 distribuição de segurança.

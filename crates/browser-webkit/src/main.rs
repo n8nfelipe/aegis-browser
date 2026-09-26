@@ -22,9 +22,10 @@ use gtk::{
     ResponseType, Window, WindowType,
 };
 use webkit2gtk::{
-    DownloadExt, HardwareAccelerationPolicy, LoadEvent, NavigationPolicyDecision,
-    NavigationPolicyDecisionExt, PolicyDecisionExt, PolicyDecisionType, Settings, SettingsExt,
-    URIRequestExt, WebContext, WebContextExt, WebView, WebViewExt,
+    CacheModel, CookieAcceptPolicy, CookieManagerExt, CookiePersistentStorage, DownloadExt,
+    HardwareAccelerationPolicy, LoadEvent, NavigationPolicyDecision, NavigationPolicyDecisionExt,
+    PolicyDecisionExt, PolicyDecisionType, Settings, SettingsExt, URIRequestExt, WebContext,
+    WebContextExt, WebView, WebViewExt, WebsiteDataManager, WebsiteDataManagerExt,
 };
 
 // Gmail rejects the stock WebKitGTK/Safari identity before it even evaluates
@@ -165,8 +166,35 @@ pub(crate) fn setup_favicon_cache_cleanup(application: &Application) -> FaviconC
     directories
 }
 
-pub(crate) fn new_ephemeral_context(favicon_cache_dirs: &FaviconCacheDirs) -> WebContext {
-    let context = WebContext::new_ephemeral();
+pub(crate) fn new_profile_context(
+    profile_id: &str,
+    favicon_cache_dirs: &FaviconCacheDirs,
+) -> WebContext {
+    let profile_name = profile_directory_name(profile_id);
+    let data_root = user_data_root()
+        .join("aegis-browser")
+        .join("profiles")
+        .join(&profile_name);
+    let cache_root = user_cache_root()
+        .join("aegis-browser")
+        .join("profiles")
+        .join(&profile_name);
+    let _ = std::fs::create_dir_all(&data_root);
+    let _ = std::fs::create_dir_all(&cache_root);
+
+    let manager = WebsiteDataManager::builder()
+        .base_data_directory(data_root.to_string_lossy())
+        .base_cache_directory(cache_root.to_string_lossy())
+        .build();
+    if let Some(cookie_manager) = manager.cookie_manager() {
+        let cookie_path = data_root.join("cookies.sqlite");
+        if let Some(path) = cookie_path.to_str() {
+            cookie_manager.set_persistent_storage(path, CookiePersistentStorage::Sqlite);
+        }
+        cookie_manager.set_accept_policy(CookieAcceptPolicy::Always);
+    }
+    let context = WebContext::with_website_data_manager(&manager);
+    context.set_cache_model(CacheModel::WebBrowser);
     context.set_automation_allowed(false);
 
     // WebKitGTK 4.1 only populates WebView::favicon after its favicon
@@ -189,6 +217,38 @@ pub(crate) fn new_ephemeral_context(favicon_cache_dirs: &FaviconCacheDirs) -> We
     }
 
     context
+}
+
+fn profile_directory_name(profile_id: &str) -> String {
+    let sanitized: String = profile_id
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() || matches!(character, '-' | '_') {
+                character
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    if sanitized.is_empty() {
+        "profile".to_owned()
+    } else {
+        sanitized
+    }
+}
+
+fn user_data_root() -> PathBuf {
+    std::env::var_os("XDG_DATA_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share")))
+        .unwrap_or_else(|| PathBuf::from(".local/share"))
+}
+
+fn user_cache_root() -> PathBuf {
+    std::env::var_os("XDG_CACHE_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cache")))
+        .unwrap_or_else(|| PathBuf::from(".cache"))
 }
 
 impl NavigationEngine for GtkEngine {
@@ -236,7 +296,7 @@ fn _legacy_build_ui(application: &Application) {
     // Ephemeral context means this first backend does not persist cookies,
     // cache or other WebKit website data between runs.
     let favicon_cache_dirs = setup_favicon_cache_cleanup(application);
-    let context = new_ephemeral_context(&favicon_cache_dirs);
+    let context = new_profile_context("Pessoal", &favicon_cache_dirs);
     let profile_contexts: ProfileContexts = Rc::new(RefCell::new(HashMap::from([(
         "Pessoal".to_owned(),
         context.clone(),
@@ -909,7 +969,7 @@ fn show_settings_dialog(
             let profiles = profile_names.borrow().clone();
             for profile in &profiles {
                 if !profile_contexts_for_response.borrow().contains_key(profile) {
-                    let context = new_ephemeral_context(&favicon_cache_dirs_for_response);
+                    let context = new_profile_context(profile, &favicon_cache_dirs_for_response);
                     configure_download_policy(&context, status.clone());
                     profile_contexts_for_response
                         .borrow_mut()

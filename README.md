@@ -16,8 +16,8 @@ transparência. O backend executável usa Rust, GTK3 e WebKitGTK.
 - **Seguro:** HTTPS obrigatório por padrão, downloads bloqueados, permissões
   privilegiadas controladas e ausência de telemetria por padrão;
 - **Em evolução:** o Aegis ainda não contempla todas as funcionalidades de um
-  navegador completo. Recursos como persistência de sessão, favoritos
-  persistentes, downloads aprovados, permissões avançadas e suporte completo a
+  navegador completo. Recursos como favoritos persistentes, downloads aprovados,
+  permissões avançadas e suporte completo a
   extensões Chrome ainda estão em desenvolvimento.
 
 ## Sumário
@@ -159,7 +159,7 @@ conteúdo do site seja confiável.
 
 Cada aba possui uma WebView e um identificador próprios. O botão `+` cria uma
 aba, e o botão `×` fecha a aba atual. Perfis adicionais recebem contextos
-efêmeros separados para novas abas.
+persistentes separados para novas abas.
 
 ### Barra de favoritos
 
@@ -177,7 +177,7 @@ As configurações atuais incluem:
 
 - tema do GTK: sistema, claro ou escuro;
 - buscador padrão: DuckDuckGo, Brave, Startpage, Qwant, Bing ou Google;
-- perfis efêmeros;
+- perfis separados;
 - política HTTPS e exceções HTTP;
 - barra de favoritos;
 - instalação e remoção de extensões compatíveis.
@@ -201,10 +201,17 @@ as mesmas decisões de uma navegação de nível superior.
 
 ### Dados do WebKit
 
-O backend atual cria contexto efêmero. Cookies, cache, armazenamento de sites e
-outros dados do WebKit não são persistidos entre execuções. Isso reduz a
-persistência acidental, mas também significa que sessões de sites podem ser
-perdidas ao fechar o navegador.
+O perfil padrão `Pessoal` usa armazenamento persistente. Cookies, cache,
+armazenamento local e sessões de sites são mantidos entre execuções em:
+
+```text
+~/.local/share/aegis-browser/profiles/Pessoal/
+~/.cache/aegis-browser/profiles/Pessoal/
+```
+
+Perfis adicionais usam diretórios separados. Isso permite manter contas e
+sessões isoladas por perfil, mas também significa que os dados persistem no
+disco até serem removidos pelo usuário.
 
 O banco temporário de favicons é criado com permissão restrita e removido ao
 encerrar o processo. Não há telemetria implementada por padrão.
@@ -488,7 +495,6 @@ codecs automaticamente. Downloads também são bloqueados por padrão.
 ## Limitações conhecidas
 
 - somente Linux/GTK3 nesta etapa;
-- contexto WebKit efêmero, sem persistência de cookies e cache;
 - favoritos e preferências ainda não persistem entre execuções;
 - não há sincronização de sessão ou restauração de abas;
 - não há arrastar/reordenar abas completo;

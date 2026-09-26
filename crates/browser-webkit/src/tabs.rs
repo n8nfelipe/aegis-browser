@@ -25,9 +25,8 @@ use webkit2gtk::{
 };
 
 use super::{
-    configure_download_policy, new_ephemeral_context, setup_favicon_cache_cleanup,
-    shell_error_text, show_http_confirmation, show_settings_dialog, BrowserPreferences, GtkEngine,
-    ProfileContexts,
+    configure_download_policy, new_profile_context, setup_favicon_cache_cleanup, shell_error_text,
+    show_http_confirmation, show_settings_dialog, BrowserPreferences, GtkEngine, ProfileContexts,
 };
 
 const TAB_FAVICON_SIZE: i32 = 16;
@@ -51,7 +50,7 @@ pub(super) fn build_ui(application: &Application) {
     let shell = Rc::new(RefCell::new(BrowserShell::new(*policy_state.borrow())));
     let preferences = Rc::new(RefCell::new(BrowserPreferences::default()));
     let favicon_cache_dirs = setup_favicon_cache_cleanup(application);
-    let context = new_ephemeral_context(&favicon_cache_dirs);
+    let context = new_profile_context("Pessoal", &favicon_cache_dirs);
     let profile_contexts: ProfileContexts = Rc::new(RefCell::new(HashMap::from([(
         "Pessoal".to_owned(),
         context.clone(),
@@ -80,10 +79,12 @@ pub(super) fn build_ui(application: &Application) {
     let go = Button::with_label("Ir");
     let back = Button::with_label("←");
     let forward = Button::with_label("→");
+    let reload = Button::from_icon_name(Some("view-refresh"), IconSize::Button);
     back.set_sensitive(false);
     forward.set_sensitive(false);
     back.set_tooltip_text(Some("Voltar"));
     forward.set_tooltip_text(Some("Avançar"));
+    reload.set_tooltip_text(Some("Atualizar página (Ctrl+R ou F5)"));
     let new_tab = Button::with_label("Nova aba");
     let settings = Button::with_label("Configurações");
     let add_bookmark = Button::with_label("☆");
@@ -112,6 +113,7 @@ pub(super) fn build_ui(application: &Application) {
     toolbar.pack_start(&security, false, false, 0);
     toolbar.pack_start(&back, false, false, 0);
     toolbar.pack_start(&forward, false, false, 0);
+    toolbar.pack_start(&reload, false, false, 0);
     toolbar.pack_start(&address, true, true, 0);
     toolbar.pack_start(&go, false, false, 0);
     toolbar.pack_start(&add_bookmark, false, false, 0);
@@ -225,6 +227,43 @@ pub(super) fn build_ui(application: &Application) {
     notebook.set_current_page(Some(0));
     sync_active_tab(&shell, initial_tab, &address, &security, &status);
     sync_navigation_buttons(initial_tab, &tabs, &back, &forward);
+
+    let reload_current: Rc<dyn Fn()> = Rc::new({
+        let notebook = notebook.clone();
+        let page_tabs = Rc::clone(&page_tabs);
+        let tabs = Rc::clone(&tabs);
+        let status = status.clone();
+        move || {
+            let Some(page) = notebook.current_page() else {
+                status.set_text("Nenhuma aba ativa");
+                return;
+            };
+            let Some(tab_id) = page_tabs.borrow().get(page as usize).copied() else {
+                status.set_text("Aba inválida");
+                return;
+            };
+            let Some(tab) = tabs.borrow().get(&tab_id).cloned() else {
+                status.set_text("Aba inexistente");
+                return;
+            };
+            tab.webview.reload();
+            status.set_text("Atualizando");
+        }
+    });
+    let reload_for_button = Rc::clone(&reload_current);
+    reload.connect_clicked(move |_| reload_for_button());
+    let reload_for_keys = Rc::clone(&reload_current);
+    window.connect_key_press_event(move |_window, event| {
+        let key = event.keyval();
+        let ctrl_reload = event.state().contains(gtk::gdk::ModifierType::CONTROL_MASK)
+            && (key == gtk::gdk::keys::constants::R || key == gtk::gdk::keys::constants::r);
+        if ctrl_reload || key == gtk::gdk::keys::constants::F5 {
+            reload_for_keys();
+            gtk::glib::Propagation::Stop
+        } else {
+            gtk::glib::Propagation::Proceed
+        }
+    });
 
     let notebook_for_back = notebook.clone();
     let page_tabs_for_back = Rc::clone(&page_tabs);
