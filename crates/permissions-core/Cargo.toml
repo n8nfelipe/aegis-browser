@@ -1,0 +1,9 @@
+[package]
+name = "aegis-permissions-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Origin-scoped permission policy for Aegis Browser"
+
+[dependencies]
+aegis-policy-core = { path = "../policy-core" }

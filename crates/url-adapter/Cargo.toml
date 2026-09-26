@@ -1,0 +1,10 @@
+[package]
+name = "aegis-url-adapter"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Trusted URL parsing adapter for Aegis Browser"
+
+[dependencies]
+aegis-policy-core = { path = "../policy-core" }
+url = "2.5"

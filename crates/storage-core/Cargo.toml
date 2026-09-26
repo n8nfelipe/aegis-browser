@@ -1,0 +1,9 @@
+[package]
+name = "aegis-storage-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Partitioned storage model for Aegis Browser"
+
+[dependencies]
+aegis-policy-core = { path = "../policy-core" }

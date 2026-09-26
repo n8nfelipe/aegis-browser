@@ -1,0 +1,17 @@
+[workspace]
+members = [
+    "crates/policy-core",
+    "crates/url-adapter",
+    "crates/storage-core",
+    "crates/permissions-core",
+    "crates/browser-shell",
+    "crates/browser-ui",
+    "crates/browser-webkit",
+]
+default-members = ["crates/browser-webkit"]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "Apache-2.0 OR MIT"
+version = "0.1.0"

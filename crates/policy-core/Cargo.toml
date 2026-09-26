@@ -1,0 +1,9 @@
+[package]
+name = "aegis-policy-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Deterministic privacy and security policies for Aegis Browser"
+
+[lib]
+path = "src/lib.rs"

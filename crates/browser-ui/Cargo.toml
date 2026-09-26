@@ -1,0 +1,11 @@
+[package]
+name = "aegis-browser-ui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Native desktop UI for Aegis Browser"
+
+[dependencies]
+aegis-browser-shell = { path = "../browser-shell" }
+aegis-policy-core = { path = "../policy-core" }
+eframe = "0.33"
