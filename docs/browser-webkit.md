@@ -10,7 +10,11 @@ cache e demais dados do WebKit são mantidos entre execuções em
 `~/.cache/aegis-browser/profiles/Pessoal`. Navegações passam pelo
 `browser-shell` antes de chamar `load_uri`; eventos de início, progresso,
 título, falha e conclusão retornam ao shell. Redirects e novas janelas passam
-por uma decisão de política; downloads são cancelados por padrão.
+por uma decisão de política; downloads passam por autorização explícita.
+Downloads agora pedem autorização, iniciam com `curl` (ou `wget` como fallback)
+e usam `~/Downloads` como destino inicial para evitar o caminho nativo instável
+do WebKitGTK em respostas grandes, como imagens ISO. O botão de downloads lista
+os arquivos e persiste o histórico em `downloads-history.json`.
 Para que a WebKitGTK 4.1 consiga expor favicons de sites como o Globo, cada
 contexto usa um banco de ícones temporário, privado e com permissão `0700`; o
 diretório é removido quando o browser é encerrado.
@@ -59,9 +63,10 @@ cargo run -p aegis-browser-webkit
   dedicados;
 - compatibilidade de formatos de vídeo depende dos plugins GStreamer presentes
   na distribuição;
-- downloads ainda não têm fluxo explícito de aprovação/quarentena: são
-  bloqueados por padrão.
-- favoritos e preferências ainda valem somente para a execução atual;
+- downloads têm aprovação explícita e destino inicial em `~/Downloads`, mas
+  ainda não passam por quarentena ou validação antimalware.
+- o buscador padrão é persistido; as demais preferências ainda valem somente
+  para a execução atual;
 - cookies e armazenamento de sites são persistentes, mas ainda não há uma tela
   dedicada para limpar dados por site ou por perfil.
 

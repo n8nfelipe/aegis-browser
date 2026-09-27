@@ -13,10 +13,10 @@ transparência. O backend executável usa Rust, GTK3 e WebKitGTK.
   componentes executados por padrão;
 - **Rápido:** inicialização direta, navegação baseada em WebKitGTK e decisões de
   segurança mantidas em um núcleo pequeno;
-- **Seguro:** HTTPS obrigatório por padrão, downloads bloqueados, permissões
+- **Seguro:** HTTPS obrigatório por padrão, downloads exigem autorização, permissões
   privilegiadas controladas e ausência de telemetria por padrão;
 - **Em evolução:** o Aegis ainda não contempla todas as funcionalidades de um
-  navegador completo. Recursos como favoritos persistentes, downloads aprovados,
+  navegador completo. Recursos como favoritos persistentes, quarentena de downloads,
   permissões avançadas e suporte completo a
   extensões Chrome ainda estão em desenvolvimento.
 
@@ -139,7 +139,7 @@ cargo run -p aegis-browser-webkit
 - os botões **voltar** e **avançar** controlam o histórico da aba;
 - links que pedem uma nova janela, como muitos links do Gmail, são abertos na
   aba atual porque o protótipo ainda não cria WebViews de popup;
-- downloads são bloqueados por padrão;
+- downloads aguardam sua autorização e a escolha explícita do destino;
 - URLs `mailto:`, `javascript:`, `file:` e outros esquemas não web não são
   tratados como navegação normal.
 
@@ -182,8 +182,9 @@ As configurações atuais incluem:
 - barra de favoritos;
 - instalação e remoção de extensões compatíveis.
 
-As preferências ainda valem somente para a execução atual, salvo a instalação
-de extensões no diretório de dados.
+O buscador padrão é salvo em `~/.local/share/aegis-browser/preferences.json`;
+as demais preferências ainda valem somente para a execução atual, salvo a
+instalação de extensões no diretório de dados.
 
 ## Segurança e privacidade
 
@@ -490,18 +491,22 @@ background pages nem APIs privilegiadas do Chrome.
 ### Vídeos ou imagens não carregam
 
 Instale os plugins GStreamer adequados à distribuição. O Aegis não instala
-codecs automaticamente. Downloads também são bloqueados por padrão.
+codecs automaticamente. Downloads exigem confirmação e escolha explícita do destino.
 
 ## Limitações conhecidas
 
 - somente Linux/GTK3 nesta etapa;
-- favoritos e preferências ainda não persistem entre execuções;
+- apenas o buscador padrão persiste entre execuções; as demais preferências
+  ainda são temporárias;
 - não há sincronização de sessão ou restauração de abas;
 - não há arrastar/reordenar abas completo;
 - não há suporte completo à WebExtension Chrome;
 - não há runtime para service workers, background pages ou APIs `chrome.*`;
 - popups são convertidos para navegação na aba atual;
-- downloads são bloqueados sem fluxo de aprovação/quarentena;
+- downloads exigem aprovação e escolha explícita do destino (com `~/Downloads`
+  como padrão), mas ainda não passam por quarentena ou validação antimalware;
+- o botão de downloads mostra os arquivos encontrados e mantém um histórico em
+  `~/.local/share/aegis-browser/downloads-history.json`;
 - permissões de câmera, microfone, certificados e DRM ainda precisam de telas
   de decisão dedicadas;
 - compatibilidade de mídia depende dos codecs da distribuição;

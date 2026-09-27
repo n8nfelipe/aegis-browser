@@ -12,21 +12,23 @@ use gtk::gdk_pixbuf::InterpType;
 use gtk::prelude::*;
 use gtk::{
     Application, ApplicationWindow, Box as GtkBox, Button, ButtonsType, Dialog, DialogFlags, Entry,
-    IconSize, Image, Label, MessageDialog, MessageType, Notebook, Orientation, PositionType,
-    ProgressBar, ResponseType, ScrolledWindow,
+    IconSize, Image, Label, MessageDialog, MessageType, Notebook, Orientation, PackType,
+    PositionType, ProgressBar, ResponseType, ScrolledWindow,
 };
 #[allow(deprecated)]
 use webkit2gtk::InstallMissingMediaPluginsPermissionRequest;
 use webkit2gtk::{
     HardwareAccelerationPolicy, LoadEvent, NavigationPolicyDecision, NavigationPolicyDecisionExt,
-    PermissionRequestExt, PolicyDecisionExt, PolicyDecisionType, Settings, SettingsExt,
-    URIRequestExt, UserContentInjectedFrames, UserContentManager, UserContentManagerExt,
-    UserScript, UserScriptInjectionTime, WebContext, WebView, WebViewExt,
+    PermissionRequestExt, PolicyDecisionExt, PolicyDecisionType, ResponsePolicyDecision,
+    ResponsePolicyDecisionExt, Settings, SettingsExt, URIRequestExt, UserContentInjectedFrames,
+    UserContentManager, UserContentManagerExt, UserScript, UserScriptInjectionTime, WebContext,
+    WebInspectorExt, WebView, WebViewExt,
 };
 
 use super::{
-    configure_download_policy, new_profile_context, setup_favicon_cache_cleanup, shell_error_text,
-    show_http_confirmation, show_settings_dialog, BrowserPreferences, GtkEngine, ProfileContexts,
+    configure_download_policy, load_download_history, new_profile_context,
+    setup_favicon_cache_cleanup, shell_error_text, show_downloads_dialog, show_http_confirmation,
+    show_settings_dialog, DownloadHistory, GtkEngine, ProfileContexts,
 };
 
 const TAB_FAVICON_SIZE: i32 = 16;
@@ -48,13 +50,14 @@ struct TabHandle {
 pub(super) fn build_ui(application: &Application) {
     let policy_state = Rc::new(RefCell::new(BrowserPolicy::default()));
     let shell = Rc::new(RefCell::new(BrowserShell::new(*policy_state.borrow())));
-    let preferences = Rc::new(RefCell::new(BrowserPreferences::default()));
+    let preferences = Rc::new(RefCell::new(super::load_preferences()));
     let favicon_cache_dirs = setup_favicon_cache_cleanup(application);
     let context = new_profile_context("Pessoal", &favicon_cache_dirs);
     let profile_contexts: ProfileContexts = Rc::new(RefCell::new(HashMap::from([(
         "Pessoal".to_owned(),
         context.clone(),
     )])));
+    let download_history: DownloadHistory = load_download_history();
     let tabs: Rc<RefCell<HashMap<TabId, TabHandle>>> = Rc::new(RefCell::new(HashMap::new()));
     let page_tabs = Rc::new(RefCell::new(Vec::<TabId>::new()));
 
@@ -85,19 +88,25 @@ pub(super) fn build_ui(application: &Application) {
     back.set_tooltip_text(Some("Voltar"));
     forward.set_tooltip_text(Some("Avançar"));
     reload.set_tooltip_text(Some("Atualizar página (Ctrl+R ou F5)"));
-    let new_tab = Button::with_label("Nova aba");
-    let settings = Button::with_label("Configurações");
+    let new_tab = Button::with_label("+");
+    new_tab.set_size_request(30, -1);
+    new_tab.set_focus_on_click(false);
+    new_tab.set_tooltip_text(Some("Abrir nova aba (Ctrl+Shift+T)"));
+    let settings = Button::from_icon_name(Some("preferences-system"), IconSize::Button);
+    settings.set_tooltip_text(Some("Configurações"));
     let add_bookmark = Button::with_label("☆");
     add_bookmark.set_tooltip_text(Some("Adicionar página aos favoritos"));
-    let bitwarden_button = Button::with_label("Bitwarden");
+    let bitwarden_button = Button::from_icon_name(Some("dialog-password"), IconSize::Button);
     bitwarden_button.set_tooltip_text(Some("Preencher credencial com Bitwarden"));
+    let downloads_button = Button::from_icon_name(Some("folder-download"), IconSize::Button);
+    downloads_button.set_tooltip_text(Some("Mostrar arquivos baixados"));
     let extension_toolbar = GtkBox::new(Orientation::Horizontal, 2);
     let bookmarks_bar = GtkBox::new(Orientation::Horizontal, 6);
     bookmarks_bar.set_margin_start(12);
     bookmarks_bar.set_margin_end(12);
     bookmarks_bar.set_margin_bottom(6);
     bookmarks_bar.set_visible(preferences.borrow().show_bookmarks_bar);
-    let bookmarks: Rc<RefCell<Vec<(String, String)>>> = Rc::new(RefCell::new(Vec::new()));
+    let bookmarks: Rc<RefCell<Vec<(String, String)>>> = Rc::new(RefCell::new(load_bookmarks()));
     let status = Label::new(Some("Pronto"));
     let progress = ProgressBar::new();
     progress.set_show_text(false);
@@ -118,7 +127,7 @@ pub(super) fn build_ui(application: &Application) {
     toolbar.pack_start(&go, false, false, 0);
     toolbar.pack_start(&add_bookmark, false, false, 0);
     toolbar.pack_start(&bitwarden_button, false, false, 0);
-    toolbar.pack_start(&new_tab, false, false, 0);
+    toolbar.pack_start(&downloads_button, false, false, 0);
     toolbar.pack_start(&settings, false, false, 0);
     toolbar.pack_start(&extension_toolbar, false, false, 0);
     toolbar.pack_start(&status, false, false, 0);
@@ -130,11 +139,28 @@ pub(super) fn build_ui(application: &Application) {
     notebook.set_show_tabs(true);
     notebook.set_tab_pos(PositionType::Top);
     notebook.set_scrollable(true);
+    notebook.set_action_widget(&new_tab, PackType::Start);
+    new_tab.show();
     root.pack_start(&notebook, true, true, 0);
     window.add(&root);
     super::refresh_extensions_toolbar(&extension_toolbar);
 
-    configure_download_policy(&context, status.clone());
+    configure_download_policy(
+        &context,
+        &window,
+        status.clone(),
+        Some(downloads_button.clone()),
+        Rc::clone(&download_history),
+    );
+
+    let window_for_downloads_button = window.clone();
+    let download_history_for_button = Rc::clone(&download_history);
+    downloads_button.connect_clicked(move |_| {
+        show_downloads_dialog(
+            &window_for_downloads_button,
+            Rc::clone(&download_history_for_button),
+        );
+    });
 
     let shell_for_new_tab = Rc::clone(&shell);
     let notebook_for_new_tab = notebook.clone();
@@ -149,7 +175,7 @@ pub(super) fn build_ui(application: &Application) {
     let back_for_new_tab = back.clone();
     let forward_for_new_tab = forward.clone();
     let security_for_new_tab = security.clone();
-    new_tab.connect_clicked(move |_| {
+    let create_new_tab: Rc<dyn Fn()> = Rc::new(move || {
         let active_profile = preferences_for_new_tab.borrow().active_profile.clone();
         let context_for_new_tab = profile_contexts_for_new_tab
             .borrow()
@@ -178,6 +204,8 @@ pub(super) fn build_ui(application: &Application) {
         }
         status_for_new_tab.set_text("Nova aba criada");
     });
+    let create_new_tab_for_button = Rc::clone(&create_new_tab);
+    new_tab.connect_clicked(move |_| create_new_tab_for_button());
 
     let initial_tab = add_tab(
         Rc::clone(&shell),
@@ -253,11 +281,18 @@ pub(super) fn build_ui(application: &Application) {
     let reload_for_button = Rc::clone(&reload_current);
     reload.connect_clicked(move |_| reload_for_button());
     let reload_for_keys = Rc::clone(&reload_current);
+    let create_new_tab_for_keys = Rc::clone(&create_new_tab);
     window.connect_key_press_event(move |_window, event| {
         let key = event.keyval();
+        let ctrl_shift_new_tab = event.state().contains(gtk::gdk::ModifierType::CONTROL_MASK)
+            && event.state().contains(gtk::gdk::ModifierType::SHIFT_MASK)
+            && (key == gtk::gdk::keys::constants::T || key == gtk::gdk::keys::constants::t);
         let ctrl_reload = event.state().contains(gtk::gdk::ModifierType::CONTROL_MASK)
             && (key == gtk::gdk::keys::constants::R || key == gtk::gdk::keys::constants::r);
-        if ctrl_reload || key == gtk::gdk::keys::constants::F5 {
+        if ctrl_shift_new_tab {
+            create_new_tab_for_keys();
+            gtk::glib::Propagation::Stop
+        } else if ctrl_reload || key == gtk::gdk::keys::constants::F5 {
             reload_for_keys();
             gtk::glib::Propagation::Stop
         } else {
@@ -295,6 +330,31 @@ pub(super) fn build_ui(application: &Application) {
         }
     });
 
+    let notebook_for_devtools = notebook.clone();
+    let page_tabs_for_devtools = Rc::clone(&page_tabs);
+    let tabs_for_devtools = Rc::clone(&tabs);
+    let status_for_devtools = status.clone();
+    let show_devtools: Rc<dyn Fn()> = Rc::new(move || {
+        let Some(page) = notebook_for_devtools.current_page() else {
+            status_for_devtools.set_text("Nenhuma aba ativa");
+            return;
+        };
+        let Some(tab_id) = page_tabs_for_devtools.borrow().get(page as usize).copied() else {
+            status_for_devtools.set_text("Aba inválida");
+            return;
+        };
+        let Some(tab) = tabs_for_devtools.borrow().get(&tab_id).cloned() else {
+            status_for_devtools.set_text("Aba inexistente");
+            return;
+        };
+        if let Some(inspector) = tab.webview.inspector() {
+            inspector.show();
+            status_for_devtools.set_text("DevTools abertas");
+        } else {
+            status_for_devtools.set_text("DevTools indisponíveis nesta aba");
+        }
+    });
+
     let window_for_settings = window.clone();
     let shell_for_settings = Rc::clone(&shell);
     let policy_for_settings = Rc::clone(&policy_state);
@@ -304,6 +364,8 @@ pub(super) fn build_ui(application: &Application) {
     let status_for_settings = status.clone();
     let extension_toolbar_for_settings = extension_toolbar.clone();
     let bookmarks_bar_for_settings = bookmarks_bar.clone();
+    let downloads_button_for_settings = downloads_button.clone();
+    let download_history_for_settings = Rc::clone(&download_history);
     settings.connect_clicked(move |_| {
         show_settings_dialog(
             &window_for_settings,
@@ -315,6 +377,9 @@ pub(super) fn build_ui(application: &Application) {
             status_for_settings.clone(),
             Some(extension_toolbar_for_settings.clone()),
             Some(bookmarks_bar_for_settings.clone()),
+            Some(Rc::clone(&show_devtools)),
+            Some(downloads_button_for_settings.clone()),
+            Rc::clone(&download_history_for_settings),
         );
     });
 
@@ -430,16 +495,30 @@ pub(super) fn build_ui(application: &Application) {
     let bookmarks_for_add = Rc::clone(&bookmarks);
     let bookmarks_bar_for_add = bookmarks_bar.clone();
     let address_for_bookmark = address.clone();
+    let notebook_for_bookmark = notebook.clone();
+    let page_tabs_for_bookmark = Rc::clone(&page_tabs);
+    let tabs_for_bookmark = Rc::clone(&tabs);
+    let status_for_bookmark = status.clone();
     let navigate_for_bookmark = Rc::clone(&navigate);
     add_bookmark.connect_clicked(move |_| {
-        let url = address_for_bookmark.text().trim().to_owned();
+        let current_tab_url = notebook_for_bookmark
+            .current_page()
+            .and_then(|page| page_tabs_for_bookmark.borrow().get(page as usize).copied())
+            .and_then(|tab_id| tabs_for_bookmark.borrow().get(&tab_id).cloned())
+            .and_then(|tab| tab.webview.uri().map(|uri| uri.to_string()))
+            .filter(|url| url.starts_with("http://") || url.starts_with("https://"));
+        let url = current_tab_url.unwrap_or_else(|| address_for_bookmark.text().trim().to_owned());
         if !(url.starts_with("http://") || url.starts_with("https://")) {
+            status_for_bookmark.set_text("Abra uma página HTTP ou HTTPS para salvar");
             return;
         }
         let mut bookmarks = bookmarks_for_add.borrow_mut();
-        if !bookmarks.iter().any(|(_, saved_url)| saved_url == &url) {
-            bookmarks.push((url.clone(), url));
+        if bookmarks.iter().any(|(_, saved_url)| saved_url == &url) {
+            status_for_bookmark.set_text("Página já está nos favoritos");
+            return;
         }
+        bookmarks.push((url.clone(), url));
+        let save_result = save_bookmarks(&bookmarks);
         drop(bookmarks);
         refresh_bookmarks_bar(
             &bookmarks_bar_for_add,
@@ -447,6 +526,11 @@ pub(super) fn build_ui(application: &Application) {
             &address_for_bookmark,
             &navigate_for_bookmark,
         );
+        match save_result {
+            Ok(()) => status_for_bookmark.set_text("Favorito salvo"),
+            Err(error) => status_for_bookmark
+                .set_text(&format!("Favorito salvo apenas nesta sessão: {error}")),
+        }
     });
     refresh_bookmarks_bar(&bookmarks_bar, &bookmarks, &address, &navigate);
 
@@ -508,7 +592,7 @@ fn add_tab(
         .user_content_manager(&user_content_manager)
         .build();
     let settings = Settings::new();
-    settings.set_enable_developer_extras(false);
+    settings.set_enable_developer_extras(true);
     settings.set_enable_javascript(true);
     settings.set_user_agent(Some(super::COMPATIBLE_USER_AGENT));
     // Allow sites such as Codex to copy text through the JavaScript Clipboard API.
@@ -948,7 +1032,20 @@ fn connect_navigation_policy(
             }
             true
         }
-        PolicyDecisionType::Response | PolicyDecisionType::__Unknown(_) => false,
+        PolicyDecisionType::Response => {
+            let Some(response) = decision.downcast_ref::<ResponsePolicyDecision>() else {
+                return false;
+            };
+            // A clicked download link can be reported without the main-frame
+            // flag (for example when the site uses target=_blank). Route any
+            // unsupported response through the explicit download flow.
+            if !response.is_mime_type_supported() {
+                decision.download();
+                return true;
+            }
+            false
+        }
+        PolicyDecisionType::__Unknown(_) => false,
         _ => false,
     });
 }
@@ -1109,6 +1206,42 @@ fn set_security_icon(image: &Image, icon: SecurityIcon) {
     }
     image.set_from_surface(Some(&surface));
     image.set_size_request(22, 22);
+}
+
+fn bookmarks_path() -> std::path::PathBuf {
+    super::user_data_root()
+        .join("aegis-browser")
+        .join("bookmarks.json")
+}
+
+fn load_bookmarks() -> Vec<(String, String)> {
+    let path = bookmarks_path();
+    let Ok(contents) = std::fs::read_to_string(path) else {
+        return Vec::new();
+    };
+    let Ok(bookmarks) = serde_json::from_str::<Vec<(String, String)>>(&contents) else {
+        return Vec::new();
+    };
+    bookmarks
+        .into_iter()
+        .filter(|(_, url)| url.starts_with("http://") || url.starts_with("https://"))
+        .collect()
+}
+
+fn save_bookmarks(bookmarks: &[(String, String)]) -> Result<(), String> {
+    let path = bookmarks_path();
+    let parent = path
+        .parent()
+        .ok_or_else(|| "diretório dos favoritos inválido".to_owned())?;
+    std::fs::create_dir_all(parent)
+        .map_err(|error| format!("não foi possível criar a pasta dos favoritos: {error}"))?;
+    let contents = serde_json::to_vec_pretty(bookmarks)
+        .map_err(|error| format!("não foi possível serializar os favoritos: {error}"))?;
+    let temporary_path = path.with_extension("json.tmp");
+    std::fs::write(&temporary_path, contents)
+        .map_err(|error| format!("não foi possível gravar os favoritos: {error}"))?;
+    std::fs::rename(&temporary_path, &path)
+        .map_err(|error| format!("não foi possível finalizar os favoritos: {error}"))
 }
 
 fn refresh_bookmarks_bar(

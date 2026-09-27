@@ -1,7 +1,22 @@
 [Icon Theme]
 Name=Aegis Browser
 Comment=Aegis Browser application icons
-Directories=256x256/apps,512x512/apps
+Directories=48x48/apps,64x64/apps,128x128/apps,256x256/apps,512x512/apps
+
+[48x48/apps]
+Size=48
+Context=Applications
+Type=Threshold
+
+[64x64/apps]
+Size=64
+Context=Applications
+Type=Threshold
+
+[128x128/apps]
+Size=128
+Context=Applications
+Type=Threshold
 
 [256x256/apps]
 Size=256

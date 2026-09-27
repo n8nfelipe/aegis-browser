@@ -41,8 +41,10 @@ if [[ ! -x "${source_binary}" ]]; then
 fi
 
 install -Dm755 "${source_binary}" "${binary_path}"
-install -Dm644 "${repo_root}/assets/aegis-browser.png" "${icon_dir_256}/org.aegis.Browser.png"
-install -Dm644 "${repo_root}/assets/aegis-browser.png" "${icon_dir}/org.aegis.Browser.png"
+for icon_size in 48 64 128 256 512; do
+  install -Dm644 "${repo_root}/assets/aegis-browser.png" \
+    "${icons_root}/${icon_size}x${icon_size}/apps/org.aegis.Browser.png"
+done
 # Keep the theme metadata in sync on upgrades. A previous install may have
 # left an index.theme that does not list all sizes shipped by this version.
 install -Dm644 "${repo_root}/assets/index.theme" "${icons_root}/index.theme"
