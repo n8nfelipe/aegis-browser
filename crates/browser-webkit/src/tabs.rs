@@ -20,15 +20,16 @@ use webkit2gtk::InstallMissingMediaPluginsPermissionRequest;
 use webkit2gtk::{
     HardwareAccelerationPolicy, LoadEvent, NavigationPolicyDecision, NavigationPolicyDecisionExt,
     PermissionRequestExt, PolicyDecisionExt, PolicyDecisionType, ResponsePolicyDecision,
-    ResponsePolicyDecisionExt, Settings, SettingsExt, URIRequestExt, UserContentInjectedFrames,
-    UserContentManager, UserContentManagerExt, UserScript, UserScriptInjectionTime, WebContext,
-    WebInspectorExt, WebView, WebViewExt,
+    ResponsePolicyDecisionExt, Settings, SettingsExt, URIRequestExt, URIResponseExt,
+    UserContentInjectedFrames, UserContentManager, UserContentManagerExt, UserScript,
+    UserScriptInjectionTime, WebContext, WebInspectorExt, WebView, WebViewExt,
 };
 
 use super::{
     configure_download_policy, load_download_history, new_profile_context,
-    setup_favicon_cache_cleanup, shell_error_text, show_downloads_dialog, show_http_confirmation,
-    show_settings_dialog, DownloadHistory, GtkEngine, ProfileContexts,
+    request_external_download, setup_favicon_cache_cleanup, shell_error_text,
+    show_downloads_dialog, show_http_confirmation, show_settings_dialog, DownloadHistory,
+    GtkEngine, ProfileContexts,
 };
 
 const TAB_FAVICON_SIZE: i32 = 16;
@@ -51,6 +52,11 @@ pub(super) fn build_ui(application: &Application) {
     let policy_state = Rc::new(RefCell::new(BrowserPolicy::default()));
     let shell = Rc::new(RefCell::new(BrowserShell::new(*policy_state.borrow())));
     let preferences = Rc::new(RefCell::new(super::load_preferences()));
+    let preferences_for_shutdown = Rc::clone(&preferences);
+    application.connect_shutdown(move |_| {
+        let preferences_snapshot = preferences_for_shutdown.borrow().clone();
+        let _ = super::save_preferences(&preferences_snapshot);
+    });
     let favicon_cache_dirs = setup_favicon_cache_cleanup(application);
     let context = new_profile_context("Pessoal", &favicon_cache_dirs);
     let profile_contexts: ProfileContexts = Rc::new(RefCell::new(HashMap::from([(
@@ -65,6 +71,11 @@ pub(super) fn build_ui(application: &Application) {
     window.set_title("Aegis Browser — WebKitGTK");
     set_window_icon(&window);
     window.set_default_size(1200, 800);
+    let preferences_for_window_close = Rc::clone(&preferences);
+    window.connect_destroy(move |_| {
+        let preferences_snapshot = preferences_for_window_close.borrow().clone();
+        let _ = super::save_preferences(&preferences_snapshot);
+    });
 
     let root = GtkBox::new(Orientation::Vertical, 0);
     let toolbar = GtkBox::new(Orientation::Horizontal, 6);
@@ -175,6 +186,9 @@ pub(super) fn build_ui(application: &Application) {
     let back_for_new_tab = back.clone();
     let forward_for_new_tab = forward.clone();
     let security_for_new_tab = security.clone();
+    let window_for_new_tab = window.clone();
+    let downloads_button_for_new_tab = downloads_button.clone();
+    let download_history_for_new_tab = Rc::clone(&download_history);
     let create_new_tab: Rc<dyn Fn()> = Rc::new(move || {
         let active_profile = preferences_for_new_tab.borrow().active_profile.clone();
         let context_for_new_tab = profile_contexts_for_new_tab
@@ -194,6 +208,9 @@ pub(super) fn build_ui(application: &Application) {
             back_for_new_tab.clone(),
             forward_for_new_tab.clone(),
             security_for_new_tab.clone(),
+            &window_for_new_tab,
+            downloads_button_for_new_tab.clone(),
+            Rc::clone(&download_history_for_new_tab),
         );
         if let Some(page) = page_tabs_for_new_tab
             .borrow()
@@ -219,6 +236,9 @@ pub(super) fn build_ui(application: &Application) {
         back.clone(),
         forward.clone(),
         security.clone(),
+        &window,
+        downloads_button.clone(),
+        Rc::clone(&download_history),
     );
 
     let shell_for_switch = Rc::clone(&shell);
@@ -573,6 +593,9 @@ fn add_tab(
     back_button: Button,
     forward_button: Button,
     security: Image,
+    window: &ApplicationWindow,
+    downloads_button: Button,
+    download_history: DownloadHistory,
 ) -> TabId {
     let tab_id = shell.borrow_mut().new_tab();
     let user_content_manager = UserContentManager::new();
@@ -612,7 +635,15 @@ fn add_tab(
     webview.set_settings(&settings);
 
     let approved_loads = Rc::new(RefCell::new(HashSet::new()));
-    connect_navigation_policy(&webview, policy_state, Rc::clone(&approved_loads));
+    connect_navigation_policy(
+        &webview,
+        policy_state,
+        Rc::clone(&approved_loads),
+        window,
+        status.clone(),
+        downloads_button,
+        download_history,
+    );
     connect_media_permission_policy(&webview, Rc::clone(&shell), tab_id, status.clone());
     let engine = Rc::new(RefCell::new(GtkEngine {
         webview: webview.clone(),
@@ -945,7 +976,12 @@ fn connect_navigation_policy(
     webview: &WebView,
     policy_state: Rc<RefCell<BrowserPolicy>>,
     approved_loads: Rc<RefCell<HashSet<String>>>,
+    window: &ApplicationWindow,
+    status: Label,
+    downloads_button: Button,
+    download_history: DownloadHistory,
 ) {
+    let window = window.clone();
     webview.connect_decide_policy(move |view, decision, decision_type| match decision_type {
         PolicyDecisionType::NewWindowAction => {
             // Gmail and other web apps commonly open message links with
@@ -1040,7 +1076,26 @@ fn connect_navigation_policy(
             // flag (for example when the site uses target=_blank). Route any
             // unsupported response through the explicit download flow.
             if !response.is_mime_type_supported() {
-                decision.download();
+                let Some(source_url) = response.request().and_then(|request| request.uri()) else {
+                    decision.ignore();
+                    status.set_text("Download recusado: URL indisponível");
+                    return true;
+                };
+                let source_url = source_url.to_string();
+                let suggested_filename = response
+                    .response()
+                    .and_then(|response| response.suggested_filename())
+                    .map(|filename| super::safe_download_filename(filename.as_str()))
+                    .unwrap_or_else(|| super::suggested_filename_from_url(&source_url));
+                decision.ignore();
+                request_external_download(
+                    &window,
+                    status.clone(),
+                    Some(downloads_button.clone()),
+                    Rc::clone(&download_history),
+                    source_url,
+                    suggested_filename,
+                );
                 return true;
             }
             false

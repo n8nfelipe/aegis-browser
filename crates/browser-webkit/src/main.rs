@@ -151,26 +151,40 @@ struct StoredPreferences {
     search_engine: Option<String>,
 }
 
+fn preferences_directory() -> PathBuf {
+    user_data_root().join("aegis-browser")
+}
+
+fn preferences_path() -> PathBuf {
+    preferences_directory().join("preferences.json")
+}
+
+fn search_engine_path() -> PathBuf {
+    preferences_directory().join("search-engine.txt")
+}
+
 pub(crate) fn load_preferences() -> BrowserPreferences {
-    let path = user_data_root()
-        .join("aegis-browser")
-        .join("preferences.json");
+    let mut preferences = BrowserPreferences::default();
+    if let Ok(search_engine) = std::fs::read_to_string(search_engine_path()) {
+        preferences.search_engine = SearchEngine::from_identifier(Some(search_engine.trim()));
+        return preferences;
+    }
+
+    let path = preferences_path();
     let Ok(contents) = std::fs::read_to_string(path) else {
-        return BrowserPreferences::default();
+        return preferences;
     };
     let Ok(stored) = serde_json::from_str::<StoredPreferences>(&contents) else {
-        return BrowserPreferences::default();
+        return preferences;
     };
 
-    let mut preferences = BrowserPreferences::default();
     preferences.search_engine = SearchEngine::from_identifier(stored.search_engine.as_deref());
     preferences
 }
 
 fn save_preferences(preferences: &BrowserPreferences) -> Result<(), String> {
-    let path = user_data_root()
-        .join("aegis-browser")
-        .join("preferences.json");
+    let directory = preferences_directory();
+    let path = preferences_path();
     let parent = path
         .parent()
         .ok_or_else(|| "diretório das preferências inválido".to_owned())?;
@@ -185,7 +199,14 @@ fn save_preferences(preferences: &BrowserPreferences) -> Result<(), String> {
     std::fs::write(&temporary_path, contents)
         .map_err(|error| format!("não foi possível gravar as preferências: {error}"))?;
     std::fs::rename(&temporary_path, &path)
-        .map_err(|error| format!("não foi possível finalizar as preferências: {error}"))
+        .map_err(|error| format!("não foi possível finalizar as preferências: {error}"))?;
+
+    let search_path = search_engine_path();
+    let search_temporary_path = directory.join("search-engine.txt.tmp");
+    std::fs::write(&search_temporary_path, preferences.search_engine.id())
+        .map_err(|error| format!("não foi possível gravar o buscador: {error}"))?;
+    std::fs::rename(&search_temporary_path, &search_path)
+        .map_err(|error| format!("não foi possível finalizar o buscador: {error}"))
 }
 
 impl Default for BrowserPreferences {
@@ -810,6 +831,24 @@ fn show_settings_dialog(
     }
     search_engine.set_width_request(220);
     search_engine.set_active_id(Some(current_preferences.search_engine.id()));
+    let preferences_for_search_change = Rc::clone(&preferences);
+    let status_for_search_change = status.clone();
+    search_engine.connect_changed(move |combo| {
+        let selected_search_engine = SearchEngine::from_id(combo.active_id());
+        let preferences_snapshot = {
+            let mut preferences = preferences_for_search_change.borrow_mut();
+            preferences.search_engine = selected_search_engine;
+            preferences.clone()
+        };
+        match save_preferences(&preferences_snapshot) {
+            Ok(()) => status_for_search_change.set_text(&format!(
+                "Buscador salvo: {}",
+                selected_search_engine.label()
+            )),
+            Err(error) => status_for_search_change
+                .set_text(&format!("Não foi possível salvar o buscador: {error}")),
+        }
+    });
     search_grid.attach(&search_label, 0, 0, 1, 1);
     search_grid.attach(&search_engine, 1, 0, 1, 1);
     let search_help = Label::new(Some(
@@ -1066,6 +1105,19 @@ fn show_settings_dialog(
     });
 
     content.add(&notebook);
+
+    let search_engine_for_close = search_engine.clone();
+    let preferences_for_close = Rc::clone(&preferences);
+    dialog.connect_delete_event(move |_, _| {
+        let selected_search_engine = SearchEngine::from_id(search_engine_for_close.active_id());
+        let preferences_snapshot = {
+            let mut preferences = preferences_for_close.borrow_mut();
+            preferences.search_engine = selected_search_engine;
+            preferences.clone()
+        };
+        let _ = save_preferences(&preferences_snapshot);
+        gtk::glib::Propagation::Proceed
+    });
 
     let shell_for_response = shell;
     let policy_for_response = policy_state;
@@ -1416,7 +1468,7 @@ fn expand_user_path(path: &str) -> PathBuf {
     PathBuf::from(path)
 }
 
-fn suggested_filename_from_url(source_url: &str) -> String {
+pub(crate) fn suggested_filename_from_url(source_url: &str) -> String {
     source_url
         .split('?')
         .next()
@@ -1426,7 +1478,7 @@ fn suggested_filename_from_url(source_url: &str) -> String {
         .to_owned()
 }
 
-fn safe_download_filename(filename: &str) -> String {
+pub(crate) fn safe_download_filename(filename: &str) -> String {
     Path::new(filename)
         .file_name()
         .and_then(|name| name.to_str())
@@ -1613,62 +1665,75 @@ pub(crate) fn configure_download_policy(
         download.cancel();
 
         let Some(source_url) = source_url else {
-            status_for_download.set_text("Download cancelado: URL indisponível");
+            status_for_download.set_text("Download recusado: URL indisponível");
             return;
         };
         let suggested_filename =
             suggested_filename.unwrap_or_else(|| suggested_filename_from_url(&source_url));
-        status_for_download.set_text("Download aguardando autorização");
+        request_external_download(
+            &window_for_download,
+            status_for_download,
+            downloads_button_for_download,
+            download_history_for_download,
+            source_url,
+            suggested_filename,
+        );
+    });
+}
 
-        let source_url_for_response = source_url.clone();
-        let suggested_filename_for_response = suggested_filename.clone();
-        let status_for_response = status_for_download.clone();
-        let downloads_button_for_response = downloads_button_for_download.clone();
-        let download_history_for_response = Rc::clone(&download_history_for_download);
-        glib::idle_add_local_once(move || {
-            let approval = MessageDialog::new(
-                Some(&window_for_download),
-                DialogFlags::MODAL | DialogFlags::DESTROY_WITH_PARENT,
-                MessageType::Question,
-                ButtonsType::None,
-                "Permitir este download?",
-            );
-            approval.set_title("Download solicitado");
-            approval.set_secondary_text(Some(
-                "Uma página solicitou um arquivo. Permita o download para escolher onde salvá-lo.",
-            ));
-            approval.add_button("Bloquear", ResponseType::Cancel);
-            approval.add_button("Permitir", ResponseType::Accept);
-            approval.connect_response(move |dialog, response| {
-                if response != ResponseType::Accept {
-                    dialog.close();
-                    dialog.hide();
-                    status_for_response.set_text("Download bloqueado");
-                    return;
-                }
-
-                let window_for_destination = window_for_download.clone();
-                let source_url_for_destination = source_url_for_response.clone();
-                let suggested_filename_for_destination = suggested_filename_for_response.clone();
-                let status_for_destination = status_for_response.clone();
-                let downloads_button_for_destination = downloads_button_for_response.clone();
-                let download_history_for_destination = Rc::clone(&download_history_for_response);
+pub(crate) fn request_external_download(
+    window: &ApplicationWindow,
+    status: Label,
+    downloads_button: Option<Button>,
+    download_history: DownloadHistory,
+    source_url: String,
+    suggested_filename: String,
+) {
+    status.set_text("Download aguardando autorização");
+    let window = window.clone();
+    glib::idle_add_local_once(move || {
+        let approval = MessageDialog::new(
+            Some(&window),
+            DialogFlags::MODAL | DialogFlags::DESTROY_WITH_PARENT,
+            MessageType::Question,
+            ButtonsType::None,
+            "Permitir este download?",
+        );
+        approval.set_title("Download solicitado");
+        approval.set_secondary_text(Some(
+            "Uma página solicitou um arquivo. Permita o download para escolher onde salvá-lo.",
+        ));
+        approval.add_button("Bloquear", ResponseType::Cancel);
+        approval.add_button("Permitir", ResponseType::Accept);
+        approval.connect_response(move |dialog, response| {
+            if response != ResponseType::Accept {
                 dialog.close();
                 dialog.hide();
-                status_for_response.set_text("Download autorizado; escolhendo destino");
-                glib::idle_add_local_once(move || {
-                    show_download_destination_chooser(
-                        &window_for_destination,
-                        &source_url_for_destination,
-                        &suggested_filename_for_destination,
-                        &status_for_destination,
-                        downloads_button_for_destination,
-                        download_history_for_destination,
-                    );
-                });
+                status.set_text("Download bloqueado");
+                return;
+            }
+
+            let window_for_destination = window.clone();
+            let source_url_for_destination = source_url.clone();
+            let suggested_filename_for_destination = suggested_filename.clone();
+            let status_for_destination = status.clone();
+            let downloads_button_for_destination = downloads_button.clone();
+            let download_history_for_destination = Rc::clone(&download_history);
+            dialog.close();
+            dialog.hide();
+            status.set_text("Download autorizado; escolhendo destino");
+            glib::idle_add_local_once(move || {
+                show_download_destination_chooser(
+                    &window_for_destination,
+                    &source_url_for_destination,
+                    &suggested_filename_for_destination,
+                    &status_for_destination,
+                    downloads_button_for_destination,
+                    download_history_for_destination,
+                );
             });
-            approval.show_all();
         });
+        approval.show_all();
     });
 }
 
