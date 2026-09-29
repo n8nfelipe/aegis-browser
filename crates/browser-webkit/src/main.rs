@@ -1411,8 +1411,13 @@ fn show_download_destination_chooser(
     let source_url = source_url.to_owned();
     let status_for_response = status.clone();
     let suggested_filename = suggested_filename.to_owned();
+    let response_handled = Rc::new(Cell::new(false));
+    let response_handled_for_response = Rc::clone(&response_handled);
     dialog.connect_response(move |dialog, response| {
         if response == ResponseType::Accept {
+            if response_handled_for_response.get() {
+                return;
+            }
             let raw_destination = destination_entry.text().trim().to_owned();
             if raw_destination.is_empty() {
                 status_for_response.set_text("Informe um destino para o download");
@@ -1425,17 +1430,20 @@ fn show_download_destination_chooser(
                 destination
             };
             let Some(parent) = destination.parent() else {
+                response_handled_for_response.set(true);
                 dialog.close();
                 status_for_response.set_text("Destino de download inválido");
                 return;
             };
             if let Err(error) = std::fs::create_dir_all(parent) {
+                response_handled_for_response.set(true);
                 dialog.close();
                 status_for_response.set_text(&format!(
                     "Não foi possível criar a pasta do download: {error}"
                 ));
                 return;
             }
+            response_handled_for_response.set(true);
             dialog.close();
             start_external_download(
                 &source_url,
@@ -1444,7 +1452,7 @@ fn show_download_destination_chooser(
                 downloads_button.as_ref(),
                 &download_history,
             );
-        } else {
+        } else if !response_handled_for_response.replace(true) {
             dialog.close();
             status_for_response.set_text("Download cancelado");
         }
