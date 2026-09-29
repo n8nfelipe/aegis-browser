@@ -50,6 +50,16 @@ done
 install -Dm644 "${repo_root}/assets/index.theme" "${icons_root}/index.theme"
 install -d "${applications_dir}" "${extensions_dir}"
 
+# The privacy guard is shipped with Aegis as a first-party unpacked extension.
+# Do not overwrite a user-managed copy during upgrades; removing it from the
+# browser settings allows the current bundled version to be installed again.
+builtin_extension_source="${repo_root}/extensions/aegis-privacy-guard"
+builtin_extension_destination="${extensions_dir}/aegis-privacy-guard"
+if [[ -d "${builtin_extension_source}" && ! -e "${builtin_extension_destination}" ]]; then
+  cp -a "${builtin_extension_source}" "${builtin_extension_destination}"
+  printf 'Extensão incluída: Aegis Privacy Guard\n'
+fi
+
 # Desktop Exec entries use backslash escaping for spaces and metacharacters.
 desktop_binary="$(printf '%s' "${binary_path}" | sed 's/[\\&|]/\\&/g; s/ /\\ /g')"
 desktop_icon="$(printf '%s' "${icon_dir_256}/org.aegis.Browser.png" | sed 's/[\\&|]/\\&/g; s/ /\\ /g')"

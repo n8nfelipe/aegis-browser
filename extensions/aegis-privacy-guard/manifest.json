@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Aegis Privacy Guard",
+  "version": "1.0.0",
+  "description": "Remove rastreadores comuns dos links e reduz sobreposições invasivas nas páginas.",
+  "icons": {
+    "32": "icon.xpm"
+  },
+  "action": {
+    "default_title": "Aegis Privacy Guard",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_start"
+    }
+  ]
+}

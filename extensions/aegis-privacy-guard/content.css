@@ -1,0 +1,42 @@
+.aegis-privacy-hidden {
+  display: none !important;
+  visibility: hidden !important;
+}
+
+.aegis-privacy-status {
+  align-items: center;
+  background: #14251e;
+  border: 1px solid #3a8061;
+  border-radius: 10px;
+  box-shadow: 0 8px 30px rgb(0 0 0 / 22%);
+  color: #effaf4;
+  display: flex;
+  font: 13px/1.3 system-ui, sans-serif;
+  gap: 9px;
+  max-width: min(360px, calc(100vw - 32px));
+  padding: 10px 12px;
+  position: fixed;
+  right: 16px;
+  top: 16px;
+  z-index: 2147483647;
+}
+
+.aegis-privacy-status span {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.aegis-privacy-status small {
+  color: #b9dfca;
+}
+
+.aegis-privacy-status button {
+  background: transparent;
+  border: 0;
+  color: #b9dfca;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  margin-left: auto;
+  padding: 0 0 0 4px;
+}

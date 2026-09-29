@@ -49,20 +49,37 @@ struct TabHandle {
 }
 
 pub(super) fn build_ui(application: &Application) {
-    let policy_state = Rc::new(RefCell::new(BrowserPolicy::default()));
+    let loaded_preferences = super::load_preferences();
+    let policy_state = Rc::new(RefCell::new(BrowserPolicy {
+        https_only: loaded_preferences.https_only,
+        allow_loopback_http: loaded_preferences.allow_loopback_http,
+        confirm_http_exceptions: loaded_preferences.confirm_http_exceptions,
+    }));
     let shell = Rc::new(RefCell::new(BrowserShell::new(*policy_state.borrow())));
-    let preferences = Rc::new(RefCell::new(super::load_preferences()));
+    let preferences = Rc::new(RefCell::new(loaded_preferences));
+    super::apply_theme(preferences.borrow().theme);
     let preferences_for_shutdown = Rc::clone(&preferences);
     application.connect_shutdown(move |_| {
         let preferences_snapshot = preferences_for_shutdown.borrow().clone();
         let _ = super::save_preferences(&preferences_snapshot);
     });
     let favicon_cache_dirs = setup_favicon_cache_cleanup(application);
-    let context = new_profile_context("Pessoal", &favicon_cache_dirs);
-    let profile_contexts: ProfileContexts = Rc::new(RefCell::new(HashMap::from([(
-        "Pessoal".to_owned(),
-        context.clone(),
-    )])));
+    let mut initial_profile_contexts = HashMap::new();
+    for profile in &preferences.borrow().profiles {
+        initial_profile_contexts.insert(
+            profile.clone(),
+            new_profile_context(profile, &favicon_cache_dirs),
+        );
+    }
+    let context = initial_profile_contexts
+        .get("Pessoal")
+        .cloned()
+        .unwrap_or_else(|| new_profile_context("Pessoal", &favicon_cache_dirs));
+    let profile_contexts: ProfileContexts = Rc::new(RefCell::new(initial_profile_contexts));
+    profile_contexts
+        .borrow_mut()
+        .entry("Pessoal".to_owned())
+        .or_insert_with(|| context.clone());
     let download_history: DownloadHistory = load_download_history();
     let tabs: Rc<RefCell<HashMap<TabId, TabHandle>>> = Rc::new(RefCell::new(HashMap::new()));
     let page_tabs = Rc::new(RefCell::new(Vec::<TabId>::new()));
@@ -138,9 +155,9 @@ pub(super) fn build_ui(application: &Application) {
     toolbar.pack_start(&go, false, false, 0);
     toolbar.pack_start(&add_bookmark, false, false, 0);
     toolbar.pack_start(&bitwarden_button, false, false, 0);
-    toolbar.pack_start(&downloads_button, false, false, 0);
-    toolbar.pack_start(&settings, false, false, 0);
     toolbar.pack_start(&extension_toolbar, false, false, 0);
+    toolbar.pack_start(&settings, false, false, 0);
+    toolbar.pack_start(&downloads_button, false, false, 0);
     toolbar.pack_start(&status, false, false, 0);
     root.pack_start(&toolbar, false, false, 0);
     root.pack_start(&progress, false, false, 0);
@@ -156,13 +173,15 @@ pub(super) fn build_ui(application: &Application) {
     window.add(&root);
     super::refresh_extensions_toolbar(&extension_toolbar);
 
-    configure_download_policy(
-        &context,
-        &window,
-        status.clone(),
-        Some(downloads_button.clone()),
-        Rc::clone(&download_history),
-    );
+    for profile_context in profile_contexts.borrow().values() {
+        configure_download_policy(
+            profile_context,
+            &window,
+            status.clone(),
+            Some(downloads_button.clone()),
+            Rc::clone(&download_history),
+        );
+    }
 
     let window_for_downloads_button = window.clone();
     let download_history_for_button = Rc::clone(&download_history);
@@ -1114,6 +1133,16 @@ fn connect_media_permission_policy(
     status: Label,
 ) {
     webview.connect_permission_request(move |_view, request| {
+        // WebKitGTK 2.42+ uses a dedicated permission request for the
+        // asynchronous Clipboard API (`navigator.clipboard`). The Rust
+        // bindings used here predate that wrapper, so identify the request by
+        // its registered GObject type while keeping every other permission
+        // denied by default below.
+        if request.type_().name() == "WebKitClipboardPermissionRequest" {
+            request.allow();
+            return true;
+        }
+
         if request
             .downcast_ref::<InstallMissingMediaPluginsPermissionRequest>()
             .is_some()

@@ -1,0 +1,82 @@
+:root {
+  color-scheme: dark;
+  font-family: system-ui, sans-serif;
+}
+
+body {
+  background: #101714;
+  color: #effaf4;
+  margin: 0;
+  min-width: 290px;
+}
+
+main {
+  padding: 22px;
+}
+
+.brand {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.brand img {
+  border-radius: 11px;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 24%);
+  flex: 0 0 auto;
+}
+
+.eyebrow {
+  color: #79c69b;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .14em;
+}
+
+h1 {
+  font-size: 23px;
+  margin: 5px 0 0;
+}
+
+.state {
+  align-items: center;
+  background: #192a22;
+  border-radius: 7px;
+  color: #b9dfca;
+  display: flex;
+  font-size: 13px;
+  gap: 8px;
+  margin: 0 0 22px;
+  padding: 9px 10px;
+}
+
+.dot {
+  background: #68d391;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px rgb(104 211 145 / 16%);
+  height: 7px;
+  width: 7px;
+}
+
+h2 {
+  font-size: 13px;
+  margin: 0 0 8px;
+}
+
+ul {
+  color: #c2d5ca;
+  font-size: 13px;
+  line-height: 1.55;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.note {
+  border-top: 1px solid #2b3d33;
+  color: #8fa99a;
+  font-size: 11px;
+  line-height: 1.45;
+  margin: 20px 0 0;
+  padding-top: 14px;
+}

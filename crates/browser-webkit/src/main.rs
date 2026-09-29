@@ -67,7 +67,11 @@ impl ThemePreference {
     }
 
     fn from_id(id: Option<glib::GString>) -> Self {
-        match id.as_deref() {
+        Self::from_identifier(id.as_deref())
+    }
+
+    fn from_identifier(id: Option<&str>) -> Self {
+        match id {
             Some("light") => Self::Light,
             Some("dark") => Self::Dark,
             _ => Self::System,
@@ -143,12 +147,29 @@ pub(crate) struct BrowserPreferences {
     pub show_bookmarks_bar: bool,
     pub active_profile: String,
     pub profiles: Vec<String>,
+    pub https_only: bool,
+    pub allow_loopback_http: bool,
+    pub confirm_http_exceptions: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 struct StoredPreferences {
     #[serde(default)]
     search_engine: Option<String>,
+    #[serde(default)]
+    theme: Option<String>,
+    #[serde(default)]
+    show_bookmarks_bar: Option<bool>,
+    #[serde(default)]
+    active_profile: Option<String>,
+    #[serde(default)]
+    profiles: Option<Vec<String>>,
+    #[serde(default)]
+    https_only: Option<bool>,
+    #[serde(default)]
+    allow_loopback_http: Option<bool>,
+    #[serde(default)]
+    confirm_http_exceptions: Option<bool>,
 }
 
 fn preferences_directory() -> PathBuf {
@@ -165,25 +186,83 @@ fn search_engine_path() -> PathBuf {
 
 pub(crate) fn load_preferences() -> BrowserPreferences {
     let mut preferences = BrowserPreferences::default();
-    if let Ok(search_engine) = std::fs::read_to_string(search_engine_path()) {
-        preferences.search_engine = SearchEngine::from_identifier(Some(search_engine.trim()));
-        return preferences;
-    }
-
     let path = preferences_path();
-    let Ok(contents) = std::fs::read_to_string(path) else {
-        return preferences;
-    };
-    let Ok(stored) = serde_json::from_str::<StoredPreferences>(&contents) else {
-        return preferences;
-    };
+    let stored = std::fs::read_to_string(path)
+        .ok()
+        .and_then(|contents| serde_json::from_str::<StoredPreferences>(&contents).ok());
 
-    preferences.search_engine = SearchEngine::from_identifier(stored.search_engine.as_deref());
+    if let Some(stored) = stored {
+        if let Some(search_engine) = stored.search_engine.as_deref() {
+            preferences.search_engine = SearchEngine::from_identifier(Some(search_engine));
+        }
+        if let Some(theme) = stored.theme.as_deref() {
+            preferences.theme = ThemePreference::from_identifier(Some(theme));
+        }
+        if let Some(show_bookmarks_bar) = stored.show_bookmarks_bar {
+            preferences.show_bookmarks_bar = show_bookmarks_bar;
+        }
+        if let Some(https_only) = stored.https_only {
+            preferences.https_only = https_only;
+        }
+        if let Some(allow_loopback_http) = stored.allow_loopback_http {
+            preferences.allow_loopback_http = allow_loopback_http;
+        }
+        if let Some(confirm_http_exceptions) = stored.confirm_http_exceptions {
+            preferences.confirm_http_exceptions = confirm_http_exceptions;
+        }
+        if let Some(profiles) = stored.profiles {
+            let profiles = profiles
+                .into_iter()
+                .filter_map(|profile| {
+                    let profile: String = profile
+                        .chars()
+                        .filter(|character| !character.is_control())
+                        .take(32)
+                        .collect();
+                    let profile = profile.trim().to_owned();
+                    (!profile.is_empty()).then_some(profile)
+                })
+                .fold(Vec::new(), |mut profiles, profile| {
+                    if !profiles.contains(&profile) {
+                        profiles.push(profile);
+                    }
+                    profiles
+                });
+            if !profiles.is_empty() {
+                preferences.profiles = profiles;
+            }
+        }
+        if !preferences
+            .profiles
+            .iter()
+            .any(|profile| profile == "Pessoal")
+        {
+            preferences.profiles.insert(0, "Pessoal".to_owned());
+        }
+        if let Some(active_profile) = stored.active_profile {
+            let active_profile: String = active_profile
+                .chars()
+                .filter(|character| !character.is_control())
+                .take(32)
+                .collect();
+            let active_profile = active_profile.trim();
+            if preferences
+                .profiles
+                .iter()
+                .any(|profile| profile == active_profile)
+            {
+                preferences.active_profile = active_profile.to_owned();
+            }
+        }
+    } else if let Ok(search_engine) = std::fs::read_to_string(search_engine_path()) {
+        // Compatibility with versions that stored only the search engine in a
+        // separate file. The JSON file is now the single source of truth.
+        preferences.search_engine = SearchEngine::from_identifier(Some(search_engine.trim()));
+    }
     preferences
 }
 
 fn save_preferences(preferences: &BrowserPreferences) -> Result<(), String> {
-    let directory = preferences_directory();
     let path = preferences_path();
     let parent = path
         .parent()
@@ -192,6 +271,13 @@ fn save_preferences(preferences: &BrowserPreferences) -> Result<(), String> {
         .map_err(|error| format!("não foi possível criar a pasta das preferências: {error}"))?;
     let stored = StoredPreferences {
         search_engine: Some(preferences.search_engine.id().to_owned()),
+        theme: Some(preferences.theme.id().to_owned()),
+        show_bookmarks_bar: Some(preferences.show_bookmarks_bar),
+        active_profile: Some(preferences.active_profile.clone()),
+        profiles: Some(preferences.profiles.clone()),
+        https_only: Some(preferences.https_only),
+        allow_loopback_http: Some(preferences.allow_loopback_http),
+        confirm_http_exceptions: Some(preferences.confirm_http_exceptions),
     };
     let contents = serde_json::to_vec_pretty(&stored)
         .map_err(|error| format!("não foi possível serializar as preferências: {error}"))?;
@@ -201,12 +287,7 @@ fn save_preferences(preferences: &BrowserPreferences) -> Result<(), String> {
     std::fs::rename(&temporary_path, &path)
         .map_err(|error| format!("não foi possível finalizar as preferências: {error}"))?;
 
-    let search_path = search_engine_path();
-    let search_temporary_path = directory.join("search-engine.txt.tmp");
-    std::fs::write(&search_temporary_path, preferences.search_engine.id())
-        .map_err(|error| format!("não foi possível gravar o buscador: {error}"))?;
-    std::fs::rename(&search_temporary_path, &search_path)
-        .map_err(|error| format!("não foi possível finalizar o buscador: {error}"))
+    Ok(())
 }
 
 impl Default for BrowserPreferences {
@@ -217,6 +298,9 @@ impl Default for BrowserPreferences {
             show_bookmarks_bar: true,
             active_profile: "Pessoal".to_owned(),
             profiles: vec!["Pessoal".to_owned()],
+            https_only: true,
+            allow_loopback_http: true,
+            confirm_http_exceptions: true,
         }
     }
 }
@@ -831,24 +915,6 @@ fn show_settings_dialog(
     }
     search_engine.set_width_request(220);
     search_engine.set_active_id(Some(current_preferences.search_engine.id()));
-    let preferences_for_search_change = Rc::clone(&preferences);
-    let status_for_search_change = status.clone();
-    search_engine.connect_changed(move |combo| {
-        let selected_search_engine = SearchEngine::from_id(combo.active_id());
-        let preferences_snapshot = {
-            let mut preferences = preferences_for_search_change.borrow_mut();
-            preferences.search_engine = selected_search_engine;
-            preferences.clone()
-        };
-        match save_preferences(&preferences_snapshot) {
-            Ok(()) => status_for_search_change.set_text(&format!(
-                "Buscador salvo: {}",
-                selected_search_engine.label()
-            )),
-            Err(error) => status_for_search_change
-                .set_text(&format!("Não foi possível salvar o buscador: {error}")),
-        }
-    });
     search_grid.attach(&search_label, 0, 0, 1, 1);
     search_grid.attach(&search_engine, 1, 0, 1, 1);
     let search_help = Label::new(Some(
@@ -1106,19 +1172,6 @@ fn show_settings_dialog(
 
     content.add(&notebook);
 
-    let search_engine_for_close = search_engine.clone();
-    let preferences_for_close = Rc::clone(&preferences);
-    dialog.connect_delete_event(move |_, _| {
-        let selected_search_engine = SearchEngine::from_id(search_engine_for_close.active_id());
-        let preferences_snapshot = {
-            let mut preferences = preferences_for_close.borrow_mut();
-            preferences.search_engine = selected_search_engine;
-            preferences.clone()
-        };
-        let _ = save_preferences(&preferences_snapshot);
-        gtk::glib::Propagation::Proceed
-    });
-
     let shell_for_response = shell;
     let policy_for_response = policy_state;
     let preferences_for_response = preferences;
@@ -1166,6 +1219,9 @@ fn show_settings_dialog(
                 show_bookmarks_bar,
                 active_profile: selected_profile.clone(),
                 profiles,
+                https_only: policy.https_only,
+                allow_loopback_http: policy.allow_loopback_http,
+                confirm_http_exceptions: policy.confirm_http_exceptions,
             };
             let preferences_snapshot = preferences_for_response.borrow().clone();
             let preferences_save_result = save_preferences(&preferences_snapshot);
@@ -1833,5 +1889,30 @@ mod tests {
         assert!(SearchEngine::Bing
             .search_url("aegis")
             .starts_with("https://www.bing.com/search?q="));
+    }
+
+    #[test]
+    fn preferencias_serializadas_incluem_todas_as_opcoes_do_painel() {
+        let stored = StoredPreferences {
+            search_engine: Some("google".to_owned()),
+            theme: Some("dark".to_owned()),
+            show_bookmarks_bar: Some(false),
+            active_profile: Some("Trabalho".to_owned()),
+            profiles: Some(vec!["Pessoal".to_owned(), "Trabalho".to_owned()]),
+            https_only: Some(false),
+            allow_loopback_http: Some(true),
+            confirm_http_exceptions: Some(false),
+        };
+        let encoded = serde_json::to_string(&stored).unwrap();
+        let decoded: StoredPreferences = serde_json::from_str(&encoded).unwrap();
+
+        assert_eq!(decoded.search_engine.as_deref(), Some("google"));
+        assert_eq!(decoded.theme.as_deref(), Some("dark"));
+        assert_eq!(decoded.show_bookmarks_bar, Some(false));
+        assert_eq!(decoded.active_profile.as_deref(), Some("Trabalho"));
+        assert_eq!(decoded.profiles.as_ref().map(Vec::len), Some(2));
+        assert_eq!(decoded.https_only, Some(false));
+        assert_eq!(decoded.allow_loopback_http, Some(true));
+        assert_eq!(decoded.confirm_http_exceptions, Some(false));
     }
 }

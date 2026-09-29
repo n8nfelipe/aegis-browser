@@ -65,8 +65,8 @@ cargo run -p aegis-browser-webkit
   na distribuição;
 - downloads têm aprovação explícita e destino inicial em `~/Downloads`, mas
   ainda não passam por quarentena ou validação antimalware.
-- o buscador padrão é persistido; as demais preferências ainda valem somente
-  para a execução atual;
+- tema, buscador, barra de favoritos, perfis e política HTTPS são persistidos
+  em `~/.local/share/aegis-browser/preferences.json`;
 - cookies e armazenamento de sites são persistentes, mas ainda não há uma tela
   dedicada para limpar dados por site ou por perfil.
 

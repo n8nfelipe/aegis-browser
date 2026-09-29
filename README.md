@@ -181,9 +181,10 @@ As configurações atuais incluem:
 - barra de favoritos;
 - instalação e remoção de extensões compatíveis.
 
-O buscador padrão é salvo em `~/.local/share/aegis-browser/preferences.json`;
-as demais preferências ainda valem somente para a execução atual, salvo a
-instalação de extensões no diretório de dados.
+As preferências do painel são salvas em
+`~/.local/share/aegis-browser/preferences.json`, incluindo tema, buscador,
+barra de favoritos, perfis e política HTTPS. A instalação de extensões também
+é persistida no diretório de dados.
 
 ## Segurança e privacidade
 
@@ -226,8 +227,9 @@ silenciosa. A reprodução depende dos codecs GStreamer disponíveis no sistema.
 ### Clipboard
 
 O WebKit está configurado para permitir a API JavaScript de clipboard usada por
-sites como o Codex. Em um terminal Linux, copiar a saída do terminal normalmente
-usa `Ctrl+Shift+C`, e colar usa `Ctrl+Shift+V`; `Ctrl+C` interrompe o processo.
+sites como o Codex, incluindo os pedidos da API assíncrona `navigator.clipboard`.
+Em um terminal Linux, copiar a saída do terminal normalmente usa `Ctrl+Shift+C`,
+e colar usa `Ctrl+Shift+V`; `Ctrl+C` interrompe o processo.
 
 ## Extensões
 
@@ -495,8 +497,8 @@ codecs automaticamente. Downloads exigem confirmação e escolha explícita do d
 ## Limitações conhecidas
 
 - somente Linux/GTK3 nesta etapa;
-- apenas o buscador padrão persiste entre execuções; as demais preferências
-  ainda são temporárias;
+- tema, buscador, barra de favoritos, perfis e política HTTPS persistem entre
+  execuções;
 - não há sincronização de sessão ou restauração de abas;
 - não há arrastar/reordenar abas completo;
 - não há suporte completo à WebExtension Chrome;

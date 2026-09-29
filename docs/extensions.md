@@ -41,6 +41,21 @@ Também é possível adicionar uma extensão pela aba **Configurações → Exte
 a pasta e selecione o arquivo `manifest.json`; a pasta pai será copiada para o diretório de
 extensões do Aegis.
 
+## Extensão incluída
+
+O repositório contém a extensão de exemplo `extensions/aegis-privacy-guard`. Ela remove
+parâmetros conhecidos de rastreamento dos links e oculta sobreposições comuns de cookies e
+newsletter. Para instalá-la durante o desenvolvimento, selecione
+`extensions/aegis-privacy-guard/manifest.json` em **Configurações → Extensões**.
+
+Ao usar `packaging/install.sh`, ela é copiada automaticamente para o diretório de extensões
+do usuário e seu ícone aparece na barra superior. O instalador não sobrescreve uma cópia que já
+tenha sido gerenciada pelo usuário.
+
+Como o Aegis ainda não expõe `webRequest` ou APIs `chrome.*`, essa extensão não bloqueia
+requisições de rede. Ela funciona apenas com o subconjunto de content scripts e popup suportado
+atualmente.
+
 ## Limites atuais
 
 Não são executados `background` pages, service workers, popups, opções, native messaging,
