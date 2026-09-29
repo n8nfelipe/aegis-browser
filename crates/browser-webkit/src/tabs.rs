@@ -9,11 +9,12 @@ use aegis_policy_core::{BrowserPolicy, NavigationDecision, NavigationRequest};
 use aegis_url_adapter::WebUrl;
 use gtk::cairo::{Context, Format, ImageSurface, Surface};
 use gtk::gdk_pixbuf::InterpType;
+use gtk::glib;
 use gtk::prelude::*;
 use gtk::{
     Application, ApplicationWindow, Box as GtkBox, Button, ButtonsType, Dialog, DialogFlags, Entry,
-    IconSize, Image, Label, MessageDialog, MessageType, Notebook, Orientation, PackType,
-    PositionType, ProgressBar, ResponseType, ScrolledWindow,
+    EntryCompletion, IconSize, Image, Label, ListStore, MessageDialog, MessageType, Notebook,
+    Orientation, PackType, PositionType, ProgressBar, ResponseType, ScrolledWindow,
 };
 #[allow(deprecated)]
 use webkit2gtk::InstallMissingMediaPluginsPermissionRequest;
@@ -135,6 +136,17 @@ pub(super) fn build_ui(application: &Application) {
     bookmarks_bar.set_margin_bottom(6);
     bookmarks_bar.set_visible(preferences.borrow().show_bookmarks_bar);
     let bookmarks: Rc<RefCell<Vec<(String, String)>>> = Rc::new(RefCell::new(load_bookmarks()));
+    let session_suggestions: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
+    let autocomplete_model = ListStore::new(&[String::static_type(), String::static_type()]);
+    let autocomplete = EntryCompletion::new();
+    autocomplete.set_model(Some(&autocomplete_model));
+    autocomplete.set_text_column(0);
+    autocomplete.set_inline_completion(false);
+    autocomplete.set_popup_completion(true);
+    autocomplete.set_popup_set_width(true);
+    autocomplete.set_minimum_key_length(1);
+    address.set_completion(Some(&autocomplete));
+    refresh_address_completion(&autocomplete_model, &bookmarks, &session_suggestions);
     let status = Label::new(Some("Pronto"));
     let progress = ProgressBar::new();
     progress.set_show_text(false);
@@ -474,6 +486,9 @@ pub(super) fn build_ui(application: &Application) {
         let status = status.clone();
         let window = window.clone();
         let preferences = Rc::clone(&preferences);
+        let autocomplete_model = autocomplete_model.clone();
+        let bookmarks = Rc::clone(&bookmarks);
+        let session_suggestions = Rc::clone(&session_suggestions);
         move || {
             let Some(page) = notebook.current_page() else {
                 status.set_text("Nenhuma aba ativa");
@@ -502,6 +517,12 @@ pub(super) fn build_ui(application: &Application) {
             );
             match result {
                 Ok(NavigationResult::Navigated { .. }) => {
+                    remember_address_input(
+                        &session_suggestions,
+                        &autocomplete_model,
+                        &bookmarks,
+                        &input,
+                    );
                     if let Ok(url) = WebUrl::parse(&destination) {
                         set_security_indicator(&security, Some(&url));
                     }
@@ -513,6 +534,12 @@ pub(super) fn build_ui(application: &Application) {
                     status.set_text("Navegação insegura bloqueada");
                 }
                 Ok(NavigationResult::ConfirmationRequired { tab_id, .. }) => {
+                    remember_address_input(
+                        &session_suggestions,
+                        &autocomplete_model,
+                        &bookmarks,
+                        &input,
+                    );
                     show_http_confirmation(
                         &window,
                         Rc::clone(&shell),
@@ -528,6 +555,16 @@ pub(super) fn build_ui(application: &Application) {
 
     let navigate_for_button = Rc::clone(&navigate);
     go.connect_clicked(move |_| navigate_for_button());
+    let address_for_completion = address.clone();
+    let navigate_for_completion = Rc::clone(&navigate);
+    autocomplete.connect_match_selected(move |_, model, iter| {
+        if let Ok(url) = model.value(iter, 1).get::<String>() {
+            address_for_completion.set_text(&url);
+            address_for_completion.set_position(-1);
+            navigate_for_completion();
+        }
+        glib::Propagation::Stop
+    });
     let navigate_for_address = Rc::clone(&navigate);
     address.connect_activate(move |_| navigate_for_address());
 
@@ -539,6 +576,8 @@ pub(super) fn build_ui(application: &Application) {
     let tabs_for_bookmark = Rc::clone(&tabs);
     let status_for_bookmark = status.clone();
     let navigate_for_bookmark = Rc::clone(&navigate);
+    let autocomplete_model_for_bookmark = autocomplete_model.clone();
+    let session_suggestions_for_bookmark = Rc::clone(&session_suggestions);
     add_bookmark.connect_clicked(move |_| {
         let current_tab_url = notebook_for_bookmark
             .current_page()
@@ -566,6 +605,11 @@ pub(super) fn build_ui(application: &Application) {
             &navigate_for_bookmark,
             &status_for_bookmark,
         );
+        refresh_address_completion(
+            &autocomplete_model_for_bookmark,
+            &bookmarks_for_add,
+            &session_suggestions_for_bookmark,
+        );
         match save_result {
             Ok(()) => status_for_bookmark.set_text("Favorito salvo"),
             Err(error) => status_for_bookmark
@@ -575,6 +619,58 @@ pub(super) fn build_ui(application: &Application) {
     refresh_bookmarks_bar(&bookmarks_bar, &bookmarks, &address, &navigate, &status);
 
     window.show_all();
+}
+
+fn refresh_address_completion(
+    model: &ListStore,
+    bookmarks: &Rc<RefCell<Vec<(String, String)>>>,
+    session_suggestions: &Rc<RefCell<Vec<String>>>,
+) {
+    model.clear();
+    let mut seen = HashSet::new();
+    let mut suggestions = Vec::new();
+
+    for value in session_suggestions.borrow().iter().rev() {
+        if seen.insert(value.clone()) {
+            suggestions.push((value.clone(), value.clone()));
+        }
+    }
+    for (title, url) in bookmarks.borrow().iter() {
+        if seen.insert(url.clone()) {
+            let title = title.trim();
+            let display = if title.is_empty() || title == url {
+                url.clone()
+            } else {
+                format!("{title}  ·  {url}")
+            };
+            suggestions.push((display, url.clone()));
+        }
+    }
+
+    for (display, value) in suggestions.into_iter().take(24) {
+        model.insert_with_values(None, &[(0, &display), (1, &value)]);
+    }
+}
+
+fn remember_address_input(
+    session_suggestions: &Rc<RefCell<Vec<String>>>,
+    model: &ListStore,
+    bookmarks: &Rc<RefCell<Vec<(String, String)>>>,
+    input: &str,
+) {
+    let input = input.trim();
+    if input.is_empty() {
+        return;
+    }
+
+    let mut suggestions = session_suggestions.borrow_mut();
+    suggestions.retain(|value| value != input);
+    suggestions.push(input.to_owned());
+    if suggestions.len() > 24 {
+        suggestions.remove(0);
+    }
+    drop(suggestions);
+    refresh_address_completion(model, bookmarks, session_suggestions);
 }
 
 fn resolve_navigation_input(input: &str, search_engine: super::SearchEngine) -> String {

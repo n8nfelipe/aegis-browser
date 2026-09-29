@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Aegis Tracker Blocker",
+  "version": "1.0.0",
+  "description": "Bloqueia recursos comuns de publicidade, analytics e rastreamento diretamente nas páginas.",
+  "icons": {
+    "32": "icon.xpm"
+  },
+  "action": {
+    "default_title": "Aegis Tracker Blocker",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ]
+}

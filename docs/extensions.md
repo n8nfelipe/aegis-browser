@@ -48,6 +48,13 @@ parâmetros conhecidos de rastreamento dos links e oculta sobreposições comuns
 newsletter. Para instalá-la durante o desenvolvimento, selecione
 `extensions/aegis-privacy-guard/manifest.json` em **Configurações → Extensões**.
 
+Também acompanha o repositório a extensão `extensions/aegis-tracker-blocker`, que remove
+do DOM scripts, pixels, iframes e outros recursos de domínios conhecidos de publicidade,
+analytics e telemetria. Ela também limpa parâmetros de rastreamento dos links. A lista de
+domínios fica no próprio `content.js`, sem baixar listas externas ou enviar dados de navegação.
+Para instalá-la manualmente, selecione
+`extensions/aegis-tracker-blocker/manifest.json` em **Configurações → Extensões**.
+
 Ao usar `packaging/install.sh`, ela é copiada automaticamente para o diretório de extensões
 do usuário e seu ícone aparece na barra superior. O instalador não sobrescreve uma cópia que já
 tenha sido gerenciada pelo usuário.
@@ -55,6 +62,11 @@ tenha sido gerenciada pelo usuário.
 Como o Aegis ainda não expõe `webRequest` ou APIs `chrome.*`, essa extensão não bloqueia
 requisições de rede. Ela funciona apenas com o subconjunto de content scripts e popup suportado
 atualmente.
+
+O Tracker Blocker segue a mesma limitação: recursos inseridos por scripts podem ser removidos
+depois que o navegador já iniciou a requisição, e chamadas de rede feitas diretamente por APIs
+JavaScript da página não são interceptadas. O bloqueio completo de rede exige suporte do
+navegador a `webRequest`, `declarativeNetRequest` ou a um filtro de conteúdo nativo.
 
 ## Limites atuais
 
