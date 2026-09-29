@@ -545,6 +545,7 @@ pub(super) fn build_ui(application: &Application) {
             &bookmarks_for_add,
             &address_for_bookmark,
             &navigate_for_bookmark,
+            &status_for_bookmark,
         );
         match save_result {
             Ok(()) => status_for_bookmark.set_text("Favorito salvo"),
@@ -552,7 +553,7 @@ pub(super) fn build_ui(application: &Application) {
                 .set_text(&format!("Favorito salvo apenas nesta sessão: {error}")),
         }
     });
-    refresh_bookmarks_bar(&bookmarks_bar, &bookmarks, &address, &navigate);
+    refresh_bookmarks_bar(&bookmarks_bar, &bookmarks, &address, &navigate, &status);
 
     window.show_all();
 }
@@ -1304,6 +1305,7 @@ fn refresh_bookmarks_bar(
     bookmarks: &Rc<RefCell<Vec<(String, String)>>>,
     address: &Entry,
     navigate: &Rc<dyn Fn()>,
+    status: &Label,
 ) {
     for child in container.children() {
         container.remove(&child);
@@ -1315,15 +1317,59 @@ fn refresh_bookmarks_bar(
         container.pack_start(&empty, false, false, 0);
     } else {
         for (title, url) in bookmarks.borrow().iter().cloned() {
+            let item = GtkBox::new(Orientation::Horizontal, 0);
             let button = Button::with_label(&title);
             button.set_tooltip_text(Some(&url));
             let address_for_button = address.clone();
             let navigate_for_button = Rc::clone(navigate);
+            let url_for_button = url.clone();
             button.connect_clicked(move |_| {
-                address_for_button.set_text(&url);
+                address_for_button.set_text(&url_for_button);
                 navigate_for_button();
             });
-            container.pack_start(&button, false, false, 0);
+
+            let remove = Button::from_icon_name(Some("edit-delete"), IconSize::Menu);
+            remove.set_tooltip_text(Some("Excluir favorito"));
+            let bookmarks_for_remove = Rc::clone(bookmarks);
+            let container_for_remove = container.clone();
+            let address_for_remove = address.clone();
+            let navigate_for_remove = Rc::clone(navigate);
+            let status_for_remove = status.clone();
+            let url_for_remove = url.clone();
+            remove.connect_clicked(move |_| {
+                let removed = {
+                    let mut bookmarks = bookmarks_for_remove.borrow_mut();
+                    let Some(index) = bookmarks
+                        .iter()
+                        .position(|(_, saved_url)| saved_url == &url_for_remove)
+                    else {
+                        return;
+                    };
+                    let bookmark = bookmarks.remove(index);
+                    let save_result = save_bookmarks(&bookmarks);
+                    if save_result.is_err() {
+                        bookmarks.insert(index, bookmark);
+                    }
+                    save_result
+                };
+
+                refresh_bookmarks_bar(
+                    &container_for_remove,
+                    &bookmarks_for_remove,
+                    &address_for_remove,
+                    &navigate_for_remove,
+                    &status_for_remove,
+                );
+                match removed {
+                    Ok(()) => status_for_remove.set_text("Favorito excluído"),
+                    Err(error) => status_for_remove
+                        .set_text(&format!("Não foi possível excluir o favorito: {error}")),
+                }
+            });
+
+            item.pack_start(&button, true, true, 0);
+            item.pack_start(&remove, false, false, 0);
+            container.pack_start(&item, false, false, 0);
         }
     }
     container.show_all();

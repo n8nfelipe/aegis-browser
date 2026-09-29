@@ -164,12 +164,11 @@ persistentes separados para novas abas.
 ### Barra de favoritos
 
 Em **Configurações → Aparência**, ative **Mostrar barra de favoritos**. O botão
-de estrela salva a página atual na barra, e um botão da barra navega até o
-endereço salvo.
+de estrela salva a página atual na barra. Use o botão do endereço para navegar
+até o favorito e o botão **Remover** ao lado dele para excluí-lo.
 
-No estado atual, os favoritos ficam apenas na memória do processo e são
-perdidos ao fechar o navegador. Persistência dos favoritos ainda não foi
-implementada.
+Os favoritos são persistidos em `bookmarks.json` dentro do diretório de dados
+do usuário.
 
 ### Configurações
 
