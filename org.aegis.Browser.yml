@@ -1,0 +1,59 @@
+app-id: org.aegis.Browser
+runtime: org.gnome.Platform
+runtime-version: '50'
+sdk: org.gnome.Sdk
+command: aegis-browser-webkit
+cleanup:
+  - /rust
+finish-args:
+  # GTK/WebKit network access is required for a web browser.
+  - --share=network
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --device=dri
+  - --socket=pulseaudio
+  - --talk-name=org.freedesktop.Notifications
+  - --talk-name=org.freedesktop.portal.Desktop
+  - --talk-name=org.freedesktop.portal.FileChooser
+  - --filesystem=xdg-download
+  - --env=GSETTINGS_BACKEND=memory
+modules:
+  - name: rust-toolchain
+    buildsystem: simple
+    build-commands:
+      - cd rust-x86_64-unknown-linux-gnu && ./install.sh --prefix=/app/rust --without=rust-docs --disable-ldconfig --verbose
+    sources:
+      - type: archive
+        archive-type: tar-xz
+        only-arches:
+          - x86_64
+        dest: rust-x86_64-unknown-linux-gnu
+        url: https://static.rust-lang.org/dist/2026-09-03/rust-1.98.1-x86_64-unknown-linux-gnu.tar.xz
+        sha256: 5326b36c53de11d148c8f8dab6553a3d1006c2cfd32123683073fad3c302605b
+  - name: aegis-browser
+    buildsystem: simple
+    build-options:
+      append-path: /app/rust/bin
+      env:
+        CARGO_HOME: /run/build/aegis-browser/cargo
+        CARGO_NET_OFFLINE: 'true'
+    build-commands:
+      - cargo --offline fetch --manifest-path Cargo.toml --locked
+      - cargo --offline build --release --locked --package aegis-browser-webkit
+      - install -Dm755 target/release/aegis-browser-webkit /app/bin/aegis-browser-webkit
+      - install -Dm644 packaging/flatpak/icons/org.aegis.Browser-512.png /app/share/icons/hicolor/512x512/apps/org.aegis.Browser.png
+      - install -Dm644 org.aegis.Browser.desktop /app/share/applications/org.aegis.Browser.desktop
+      - install -Dm644 org.aegis.Browser.metainfo.xml /app/share/metainfo/org.aegis.Browser.metainfo.xml
+      - install -d /app/share/aegis-browser/extensions
+      - cp -a extensions/aegis-privacy-guard extensions/aegis-tracker-blocker /app/share/aegis-browser/extensions/
+    sources:
+      - type: git
+        url: https://github.com/n8nfelipe/aegis-browser.git
+        branch: main
+      # Generated from Cargo.lock with flatpak-cargo-generator.
+      # This expands to checksum-pinned crates.io sources before the build.
+      - cargo-sources.json
+    post-install:
+      - install -Dm644 packaging/flatpak/icons/org.aegis.Browser-128.png /app/share/icons/hicolor/128x128/apps/org.aegis.Browser.png
+      - install -Dm644 packaging/flatpak/icons/org.aegis.Browser-256.png /app/share/icons/hicolor/256x256/apps/org.aegis.Browser.png

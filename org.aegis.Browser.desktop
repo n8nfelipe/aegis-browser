@@ -1,0 +1,15 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Aegis Browser
+GenericName=Privacy Web Browser
+Comment=Navegador com foco em privacidade, segurança e transparência
+Exec=aegis-browser-webkit %U
+TryExec=aegis-browser-webkit
+Icon=org.aegis.Browser
+Terminal=false
+StartupNotify=true
+StartupWMClass=org.aegis.Browser
+Categories=Network;WebBrowser;Security;
+MimeType=text/html;application/xhtml+xml;x-scheme-handler/http;x-scheme-handler/https;
+Keywords=browser;web;privacy;security;
