@@ -48,7 +48,7 @@ modules:
     sources:
       - type: git
         url: https://github.com/n8nfelipe/aegis-browser.git
-        commit: 88e0cf1a7a0faaa25e1fa35d15d5795f238241ea
+        commit: 8d952969a1ae06dee94aa3c47e21361e27e4baa4
       # Generated from Cargo.lock with flatpak-cargo-generator.
       # This expands to checksum-pinned crates.io sources before the build.
       - cargo-sources.json
