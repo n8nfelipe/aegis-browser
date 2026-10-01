@@ -8,9 +8,9 @@ applications_dir="${data_dir}/applications"
 icons_root="${data_dir}/icons/hicolor"
 icon_dir_256="${icons_root}/256x256/apps"
 icon_dir="${icons_root}/512x512/apps"
-desktop_path="${applications_dir}/org.aegis.Browser.desktop"
-icon_path_256="${icon_dir_256}/org.aegis.Browser.png"
-icon_path="${icon_dir}/org.aegis.Browser.png"
+desktop_path="${applications_dir}/io.github.n8nfelipe.aegis-browser.desktop"
+icon_path_256="${icon_dir_256}/io.github.n8nfelipe.aegis-browser.png"
+icon_path="${icon_dir}/io.github.n8nfelipe.aegis-browser.png"
 
 removed=0
 

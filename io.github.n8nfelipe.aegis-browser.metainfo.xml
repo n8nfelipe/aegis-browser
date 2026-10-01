@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.n8nfelipe.aegis-browser</id>
+  <name>Aegis Browser</name>
+  <developer id="io.github.n8nfelipe">
+    <name>Aegis Browser contributors</name>
+  </developer>
+  <summary>Navegador web com foco em privacidade</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>Apache-2.0 OR MIT</project_license>
+  <description>
+    <p>O Aegis é um navegador experimental para Linux, feito com GTK e WebKitGTK. Ele prefere conexões HTTPS, pede confirmação antes de baixar arquivos e não envia telemetria. As escolhas de segurança ficam visíveis, para que você saiba o que o navegador está fazendo.</p>
+  </description>
+  <launchable type="desktop-id">io.github.n8nfelipe.aegis-browser.desktop</launchable>
+  <url type="homepage">https://github.com/n8nfelipe/aegis-browser</url>
+  <content_rating type="oars-1.1" />
+  <releases>
+    <release version="0.1.0" date="2026-09-30" />
+  </releases>
+</component>

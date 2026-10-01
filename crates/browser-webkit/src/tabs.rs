@@ -962,7 +962,7 @@ fn set_window_icon(window: &ApplicationWindow) {
     // Keep the themed name for installed builds, but also load the project
     // asset directly so `cargo run` works before the installer updates the
     // user's icon theme.
-    window.set_icon_name(Some("org.aegis.Browser"));
+    window.set_icon_name(Some("io.github.n8nfelipe.aegis-browser"));
     if let Some(icon) = load_app_icon() {
         window.set_icon(Some(&icon));
     }

@@ -82,7 +82,7 @@ Por padrão, os arquivos são instalados em:
 
 ```text
 ~/.local/bin/aegis-browser
-~/.local/share/applications/org.aegis.Browser.desktop
+~/.local/share/applications/io.github.n8nfelipe.aegis-browser.desktop
 ~/.local/share/icons/hicolor/
 ~/.local/share/aegis-browser/extensions/
 ```
@@ -128,7 +128,7 @@ cargo run -p aegis-browser-webkit
 ```
 
 `cargo run` não registra um novo lançador no menu. Para associar o processo ao
-ícone e ao `application ID` `org.aegis.Browser`, execute o instalador uma vez.
+ícone e ao `application ID` `io.github.n8nfelipe.aegis-browser`, execute o instalador uma vez.
 
 ## Uso
 

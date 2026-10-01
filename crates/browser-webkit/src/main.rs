@@ -471,7 +471,7 @@ mod bitwarden;
 mod extensions;
 mod tabs;
 
-const APPLICATION_ID: &str = "org.aegis.Browser";
+const APPLICATION_ID: &str = "io.github.n8nfelipe.aegis-browser";
 
 fn main() {
     // GTK 3 uses the program name when publishing the Wayland app_id. Keep it

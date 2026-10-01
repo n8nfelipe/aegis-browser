@@ -10,7 +10,7 @@ extensions_dir="${data_dir}/aegis-browser/extensions"
 icons_root="${data_dir}/icons/hicolor"
 icon_dir_256="${icons_root}/256x256/apps"
 icon_dir="${icons_root}/512x512/apps"
-desktop_path="${applications_dir}/org.aegis.Browser.desktop"
+desktop_path="${applications_dir}/io.github.n8nfelipe.aegis-browser.desktop"
 
 if [[ ! -d "${repo_root}/assets" || ! -f "${repo_root}/assets/aegis-browser.png" ]]; then
   printf 'Erro: assets/aegis-browser.png não foi encontrado.\n' >&2
@@ -43,7 +43,7 @@ fi
 install -Dm755 "${source_binary}" "${binary_path}"
 for icon_size in 48 64 128 256 512; do
   install -Dm644 "${repo_root}/assets/aegis-browser.png" \
-    "${icons_root}/${icon_size}x${icon_size}/apps/org.aegis.Browser.png"
+    "${icons_root}/${icon_size}x${icon_size}/apps/io.github.n8nfelipe.aegis-browser.png"
 done
 # Keep the theme metadata in sync on upgrades. A previous install may have
 # left an index.theme that does not list all sizes shipped by this version.
@@ -64,7 +64,7 @@ done
 
 # Desktop Exec entries use backslash escaping for spaces and metacharacters.
 desktop_binary="$(printf '%s' "${binary_path}" | sed 's/[\\&|]/\\&/g; s/ /\\ /g')"
-desktop_icon="$(printf '%s' "${icon_dir_256}/org.aegis.Browser.png" | sed 's/[\\&|]/\\&/g; s/ /\\ /g')"
+desktop_icon="$(printf '%s' "${icon_dir_256}/io.github.n8nfelipe.aegis-browser.png" | sed 's/[\\&|]/\\&/g; s/ /\\ /g')"
 sed "s|__AEGIS_BROWSER_BIN__|${desktop_binary}|g" \
   "${repo_root}/packaging/aegis-browser.desktop.in" > "${desktop_path}.tmp"
 sed -i "s|__AEGIS_BROWSER_ICON__|${desktop_icon}|g" "${desktop_path}.tmp"

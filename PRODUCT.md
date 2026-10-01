@@ -1,41 +1,49 @@
-# Product
+# Manifesto do Aegis
 
 <!-- impeccable:product-schema 1 -->
 
-## Platform
+## Plataforma
 
-adaptive
+Navegador para desktop, com Linux como primeira plataforma. O projeto começou
+com um protótipo em egui e hoje usa GTK3 e WebKitGTK no backend Linux.
 
-## Stack
+## Tecnologia
 
-delegated: Rust desktop application with an egui prototype and a GTK3/WebKitGTK Linux backend
+Aplicativo desktop escrito em Rust. O protótipo de interface usa egui; no Linux,
+a interface e o motor de navegação são integrados por GTK3 e WebKitGTK.
 
-## Users
+## Para quem
 
-Inferred from the project brief: people who want a desktop browser with privacy
-and security controls that are understandable and reversible.
+Para quem quer navegar com mais privacidade e entender o que o navegador faz em
+seu nome. Os controles de segurança precisam ser claros — e, quando possível,
+fáceis de rever.
 
-## Product Purpose
+## Por que existe
 
-Inferred from the project brief: provide web navigation with conservative
-security defaults, visible decisions, and no telemetry by default.
+O Aegis parte de escolhas prudentes: proteger por padrão, explicar decisões que
+afetam a navegação e não coletar telemetria. Segurança não deve depender de
+opções escondidas nem de o usuário adivinhar o que está acontecendo.
 
-## Capabilities and Constraints
+## O que orienta o projeto
 
-- Linux is the first supported desktop platform.
-- HTTPS is preferred and HTTP exceptions are explicit.
-- The WebKitGTK context is ephemeral in the current backend.
-- Browser settings must affect the shared shell policy, not only the UI.
-- Extensions and complete site partitioning remain outside the current MVP.
+- Linux é a primeira plataforma desktop atendida.
+- Preferimos HTTPS; uma exceção para HTTP deve ser explícita.
+- No backend atual, o contexto do WebKitGTK é temporário.
+- Uma configuração só vale de verdade se mudar a política do navegador, não
+  apenas o que aparece na tela.
+- Extensões e isolamento completo de dados por site ainda não fazem parte da
+  versão inicial.
 
-## Product Principles
+## Princípios
 
-- Privacy-preserving defaults.
-- Security decisions are visible and reversible.
-- Small, testable policy boundaries.
-- No silent expansion of network, disk, or execution privileges.
+- Privacidade é o ponto de partida, não um recurso opcional.
+- Decisões de segurança devem ser visíveis e, sempre que possível, reversíveis.
+- Regras pequenas e testáveis são mais fáceis de entender e manter.
+- O navegador não deve ampliar silenciosamente o acesso à rede, aos arquivos ou
+  à execução de código.
 
-## Accessibility & Inclusion
+## Acessibilidade
 
-The settings surface should use native controls, explicit labels, keyboard
-focus, and explanatory text instead of relying on color alone.
+As configurações devem usar controles nativos, rótulos claros e navegação por
+teclado. Cor não basta para comunicar uma escolha: cada controle precisa de uma
+explicação que faça sentido por si só.

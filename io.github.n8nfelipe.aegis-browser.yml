@@ -1,4 +1,4 @@
-app-id: org.aegis.Browser
+app-id: io.github.n8nfelipe.aegis-browser
 runtime: org.gnome.Platform
 runtime-version: '50'
 sdk: org.gnome.Sdk
@@ -14,8 +14,6 @@ finish-args:
   - --device=dri
   - --socket=pulseaudio
   - --talk-name=org.freedesktop.Notifications
-  - --talk-name=org.freedesktop.portal.Desktop
-  - --talk-name=org.freedesktop.portal.FileChooser
   - --filesystem=xdg-download
   - --env=GSETTINGS_BACKEND=memory
 modules:
@@ -42,18 +40,18 @@ modules:
       - cargo --offline fetch --manifest-path Cargo.toml --locked
       - cargo --offline build --release --locked --package aegis-browser-webkit
       - install -Dm755 target/release/aegis-browser-webkit /app/bin/aegis-browser-webkit
-      - install -Dm644 packaging/flatpak/icons/org.aegis.Browser-512.png /app/share/icons/hicolor/512x512/apps/org.aegis.Browser.png
-      - install -Dm644 org.aegis.Browser.desktop /app/share/applications/org.aegis.Browser.desktop
-      - install -Dm644 org.aegis.Browser.metainfo.xml /app/share/metainfo/org.aegis.Browser.metainfo.xml
+      - install -Dm644 packaging/flatpak/icons/io.github.n8nfelipe.aegis-browser-512.png /app/share/icons/hicolor/512x512/apps/io.github.n8nfelipe.aegis-browser.png
+      - install -Dm644 io.github.n8nfelipe.aegis-browser.desktop /app/share/applications/io.github.n8nfelipe.aegis-browser.desktop
+      - install -Dm644 io.github.n8nfelipe.aegis-browser.metainfo.xml /app/share/metainfo/io.github.n8nfelipe.aegis-browser.metainfo.xml
       - install -d /app/share/aegis-browser/extensions
       - cp -a extensions/aegis-privacy-guard extensions/aegis-tracker-blocker /app/share/aegis-browser/extensions/
     sources:
       - type: git
         url: https://github.com/n8nfelipe/aegis-browser.git
-        branch: main
+        commit: 88e0cf1a7a0faaa25e1fa35d15d5795f238241ea
       # Generated from Cargo.lock with flatpak-cargo-generator.
       # This expands to checksum-pinned crates.io sources before the build.
       - cargo-sources.json
     post-install:
-      - install -Dm644 packaging/flatpak/icons/org.aegis.Browser-128.png /app/share/icons/hicolor/128x128/apps/org.aegis.Browser.png
-      - install -Dm644 packaging/flatpak/icons/org.aegis.Browser-256.png /app/share/icons/hicolor/256x256/apps/org.aegis.Browser.png
+      - install -Dm644 packaging/flatpak/icons/io.github.n8nfelipe.aegis-browser-128.png /app/share/icons/hicolor/128x128/apps/io.github.n8nfelipe.aegis-browser.png
+      - install -Dm644 packaging/flatpak/icons/io.github.n8nfelipe.aegis-browser-256.png /app/share/icons/hicolor/256x256/apps/io.github.n8nfelipe.aegis-browser.png
