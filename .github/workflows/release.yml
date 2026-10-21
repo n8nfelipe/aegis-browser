@@ -1,0 +1,96 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    name: Gerar tag SemVer
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout com histórico e tags
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Calcular e publicar versão
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git fetch --tags --force
+
+          if [[ -n "$(git tag --points-at HEAD)" ]]; then
+            echo "HEAD já está marcado; nada a publicar."
+            exit 0
+          fi
+
+          latest_tag="$(git tag --list 'v[1-9]*.[0-9]*.[0-9]*' --sort=-version:refname | head -n 1)"
+
+          if [[ -z "${latest_tag}" ]]; then
+            next_tag="v1.0.0"
+            bump="primeira release"
+          else
+            version="${latest_tag#v}"
+            IFS=. read -r base_major base_minor base_patch <<< "${version}"
+            commit_range="${latest_tag}..HEAD"
+
+            commit_count="$(git rev-list --count "${commit_range}" 2>/dev/null || echo 0)"
+            if [[ "${commit_count}" -eq 0 ]]; then
+              echo "Não há commits para versionar."
+              exit 0
+            fi
+
+            bump=patch
+            while IFS= read -r commit; do
+              if git log -1 --format=%B "${commit}" | grep -Eq 'BREAKING CHANGE|BREAKING-CHANGE'; then
+                bump=major
+                break
+              elif git log -1 --format=%s "${commit}" | grep -Eq '^[A-Za-z]+(\([^)]*\))?!:'; then
+                bump=major
+                break
+              elif git log -1 --format=%s "${commit}" | grep -Eq '^feat(\([^)]*\))?:'; then
+                bump=minor
+              fi
+            done < <(git rev-list "${commit_range}")
+
+            case "${bump}" in
+              major)
+                next_major=$((base_major + 1))
+                next_minor=0
+                next_patch=0
+                ;;
+              minor)
+                next_major=${base_major}
+                next_minor=$((base_minor + 1))
+                next_patch=0
+                ;;
+              *)
+                next_major=${base_major}
+                next_minor=${base_minor}
+                next_patch=$((base_patch + 1))
+                ;;
+            esac
+
+            next_tag="v${next_major}.${next_minor}.${next_patch}"
+          fi
+
+          if git rev-parse "${next_tag}" >/dev/null 2>&1; then
+            echo "A tag ${next_tag} já existe; nada a publicar."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${next_tag}" -m "release: ${next_tag}" "${GITHUB_SHA}"
+          git push origin "${next_tag}"
+          echo "Tag ${next_tag} publicada (${bump})."
