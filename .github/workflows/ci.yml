@@ -1,11 +1,7 @@
-name: CI e release SemVer
+name: CI
 
 on:
   pull_request:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -61,83 +57,3 @@ jobs:
 
       - name: Compilar browser em release
         run: cargo build --release -p aegis-browser-webkit
-
-  semver-tag:
-    name: Gerar tag SemVer
-    needs: test
-    if: >-
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-      github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
-    steps:
-      - name: Baixar histórico completo
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Calcular próxima tag SemVer
-        id: version
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          base_version="$(sed -nE 's/^version = "([^"]+)"/\1/p' Cargo.toml | head -n1)"
-          semver_regex='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
-
-          if [[ -z "${base_version}" || ! "${base_version}" =~ ${semver_regex} ]]; then
-            echo "A versão do Cargo.toml não é SemVer válida: '${base_version}'" >&2
-            exit 1
-          fi
-
-          current_tag="$(git tag --points-at "${GITHUB_SHA}" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$' | head -n1 || true)"
-          if [[ -n "${current_tag}" ]]; then
-            echo "skip=true" >> "${GITHUB_OUTPUT}"
-            echo "O commit ${GITHUB_SHA} já possui a tag ${current_tag}; nada a fazer."
-            exit 0
-          fi
-
-          latest_tag="$(git tag --list 'v[0-9]*' --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1 || true)"
-
-          if [[ -z "${latest_tag}" ]]; then
-            tag="v${base_version}"
-          else
-            latest_version="${latest_tag#v}"
-            IFS=. read -r major minor patch <<< "${latest_version}"
-            tag="v${major}.${minor}.$((patch + 1))"
-
-            # Se o Cargo.toml já foi avançado manualmente, respeite essa versão.
-            if [[ "$(printf '%s\n' "${latest_version}" "${base_version}" | sort -V | tail -n1)" == "${base_version}" && "${base_version}" != "${latest_version}" ]]; then
-              tag="v${base_version}"
-            fi
-          fi
-
-          echo "skip=false" >> "${GITHUB_OUTPUT}"
-          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
-          echo "Próxima tag: ${tag}"
-
-      - name: Verificar se a próxima tag já existe
-        id: existing
-        if: steps.version.outputs.skip != 'true'
-        env:
-          TAG: ${{ steps.version.outputs.tag }}
-        run: |
-          if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
-            echo "exists=true" >> "${GITHUB_OUTPUT}"
-            echo "A tag ${TAG} já existe; nenhuma nova tag será criada."
-          else
-            echo "exists=false" >> "${GITHUB_OUTPUT}"
-          fi
-
-      - name: Criar e publicar tag
-        if: steps.version.outputs.skip != 'true' && steps.existing.outputs.exists != 'true'
-        env:
-          TAG: ${{ steps.version.outputs.tag }}
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag --annotate "${TAG}" --message "Release ${TAG}" "${GITHUB_SHA}"
-          git push origin "${TAG}"
